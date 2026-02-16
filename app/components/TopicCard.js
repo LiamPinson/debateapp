@@ -3,7 +3,7 @@
 const CATEGORY_COLORS = {
   politics: "bg-blue-900/40 text-blue-400",
   economics: "bg-emerald-900/40 text-emerald-400",
-  philosophy: "bg-purple-900/40 text-purple-400",
+  philosophy: "bg-orange-900/40 text-orange-400",
   science: "bg-cyan-900/40 text-cyan-400",
   culture: "bg-pink-900/40 text-pink-400",
   silly: "bg-yellow-900/40 text-yellow-400",

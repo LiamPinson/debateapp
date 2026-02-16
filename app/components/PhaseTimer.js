@@ -69,7 +69,7 @@ export default function PhaseTimer({ phase, timeLimit, onTimeUp }) {
           <circle cx="50" cy="50" r="44" fill="none" stroke="#334155" strokeWidth="6" />
           <circle
             cx="50" cy="50" r="44" fill="none"
-            stroke={urgent ? "#ef4444" : "#8b5cf6"}
+            stroke={urgent ? "#ef4444" : "#ea580c"}
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={`${2 * Math.PI * 44}`}
