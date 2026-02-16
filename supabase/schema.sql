@@ -14,6 +14,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   token_hash TEXT UNIQUE NOT NULL,
+  fingerprint TEXT, -- SHA-256 of UA + Accept-Language + IP; prevents session farming
   debate_count INTEGER DEFAULT 0,
   strike_count INTEGER DEFAULT 0,
   first_seen TIMESTAMPTZ DEFAULT NOW(),
@@ -21,6 +22,7 @@ CREATE TABLE sessions (
 );
 
 CREATE INDEX idx_sessions_token ON sessions(token_hash);
+CREATE INDEX idx_sessions_fingerprint ON sessions(fingerprint) WHERE fingerprint IS NOT NULL;
 
 -- ============================================================
 -- 2. USERS (registered)
@@ -120,6 +122,9 @@ CREATE TABLE debates (
   ai_procedural_analysis JSONB, -- Tier 1: strike detection
   ai_qualitative_analysis JSONB, -- Tier 2: quality scores
   scoring_status TEXT DEFAULT 'pending', -- pending, processing, completed
+
+  -- Pipeline state (step-level tracking for retry)
+  pipeline_state JSONB, -- { recording: {status, error, attempts}, transcription: {...}, ... }
 
   -- Results
   pro_quality_score NUMERIC(5,2),
@@ -387,3 +392,23 @@ BEGIN
   WHERE status = 'waiting' AND expires_at < NOW();
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- 15. SCHEDULED JOBS (pg_cron — enable in Supabase Dashboard > Extensions)
+-- ============================================================
+-- Expire stale queue entries every minute.
+-- Requires pg_cron extension enabled in Supabase Dashboard.
+-- Uncomment after enabling pg_cron:
+--
+-- SELECT cron.schedule(
+--   'expire-stale-queue',
+--   '* * * * *',           -- every minute
+--   $$SELECT expire_stale_queue()$$
+-- );
+--
+-- Expire old challenges every hour:
+-- SELECT cron.schedule(
+--   'expire-old-challenges',
+--   '0 * * * *',           -- every hour
+--   $$UPDATE challenges SET status = 'expired' WHERE status = 'pending' AND expires_at < NOW()$$
+-- );

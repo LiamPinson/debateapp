@@ -1,23 +1,34 @@
 import { NextResponse } from "next/server";
-import { processDebateCompletion } from "@/lib/pipeline";
+import { processDebateCompletion, retryFailedSteps } from "@/lib/pipeline";
 
 /**
  * POST /api/scoring/trigger
- * Manually trigger the scoring pipeline for a debate.
- * Useful for retrying failed pipelines or admin re-scoring.
+ * Trigger or retry the scoring pipeline for a debate.
  *
- * Body: { debateId }
+ * Body: { debateId, retry?: boolean }
  */
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { debateId } = body;
+    const { debateId, retry } = body;
 
     if (!debateId) {
       return NextResponse.json({ error: "debateId required" }, { status: 400 });
     }
 
-    // Run pipeline (non-blocking response, pipeline runs async)
+    if (retry) {
+      // Retry only failed steps
+      const result = await retryFailedSteps(debateId);
+      return NextResponse.json({
+        success: result.success,
+        failedSteps: result.failedSteps || [],
+        message: result.error || (result.success
+          ? "Retry completed successfully"
+          : `Retry completed with failures: ${result.failedSteps?.join(", ")}`),
+      });
+    }
+
+    // Full pipeline run (non-blocking)
     processDebateCompletion(debateId).catch((err) =>
       console.error(`Manual pipeline trigger failed for ${debateId}:`, err)
     );
