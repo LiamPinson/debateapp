@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { useRealtimeDebate } from "@/lib/useRealtime";
@@ -25,7 +25,7 @@ import VoteBar from "../../components/VoteBar";
 const PHASE_ORDER = ["prematch", "opening_pro", "opening_con", "freeflow", "closing_con", "closing_pro", "ended"];
 
 export default function DebatePage({ params }) {
-  const { id: debateId } = use(params);
+  const { id: debateId } = params;
   const router = useRouter();
   const { user, session } = useSession();
   const [debate, setDebate] = useState(null);

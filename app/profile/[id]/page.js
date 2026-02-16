@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { getProfile } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
 import RankBadge, { RankProgress } from "../../components/RankBadge";
 import DebateCard from "../../components/DebateCard";
 
 export default function ProfilePage({ params }) {
-  const { id: profileId } = use(params);
+  const { id: profileId } = params;
   const { user } = useSession();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
