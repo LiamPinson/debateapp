@@ -13,8 +13,8 @@ export default function Home() {
         {/* Hero */}
         <section className="py-20 sm:py-32 text-center">
           <h1 className="text-4xl sm:text-6xl font-bold mb-4">
-            Debate Anyone.{" "}
-            <span className="text-arena-accent">Win Everything.</span>
+            Argue with Strangers.{" "}
+            <span className="text-arena-accent">Win nothing.</span>
           </h1>
           <p className="text-lg text-arena-muted max-w-xl mx-auto mb-8">
             Voice-based debates with random opponents. AI-scored. Community-judged.
