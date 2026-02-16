@@ -13,6 +13,10 @@ export async function POST(request) {
     const body = await request.json();
     const { userId, sessionId, category, topicId, timeLimit, stance, ranked } = body;
 
+    if (!userId && !sessionId) {
+      return NextResponse.json({ error: "Either userId or sessionId is required" }, { status: 400 });
+    }
+
     if (!category || !timeLimit) {
       return NextResponse.json({ error: "category and timeLimit are required" }, { status: 400 });
     }

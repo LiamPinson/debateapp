@@ -40,12 +40,16 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
 
   const handleSearch = async () => {
     setError(null);
+    if (!user?.id && !session?.session_id) {
+      setError("Session not ready — please refresh the page.");
+      return;
+    }
     setSearching(true);
     setElapsed(0);
     try {
       const result = await enterQueue({
         userId: user?.id,
-        sessionId: session?.id,
+        sessionId: session?.session_id,
         category: topic?.category || "quick",
         topicId: topic?.id || null,
         timeLimit,
