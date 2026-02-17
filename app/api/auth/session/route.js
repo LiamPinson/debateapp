@@ -27,14 +27,22 @@ export async function POST(request) {
         .single();
 
       if (session) {
-        // Update last_seen and fingerprint
-        await db
+        // Update last_seen (and fingerprint if column exists)
+        const updatePayload = { last_seen: new Date().toISOString() };
+        if (fingerprint) updatePayload.fingerprint = fingerprint;
+
+        const { error: updateErr } = await db
           .from("sessions")
-          .update({
-            last_seen: new Date().toISOString(),
-            fingerprint: fingerprint,
-          })
+          .update(updatePayload)
           .eq("id", session.id);
+
+        if (updateErr && fingerprint) {
+          // fingerprint column may not exist — retry without it
+          await db
+            .from("sessions")
+            .update({ last_seen: new Date().toISOString() })
+            .eq("id", session.id);
+        }
 
         return NextResponse.json({
           session_id: session.id,
@@ -48,36 +56,40 @@ export async function POST(request) {
 
     // Check if a session already exists for this fingerprint.
     // This catches users who clear localStorage to bypass the 5-debate limit.
+    // Wrapped in try/catch — if the fingerprint column doesn't exist, skip gracefully.
     if (fingerprint) {
-      const { data: fingerprintSession } = await db
-        .from("sessions")
-        .select("*")
-        .eq("fingerprint", fingerprint)
-        .order("last_seen", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (fingerprintSession) {
-        // Existing fingerprint found — reissue a token for this session
-        const newToken = randomBytes(32).toString("hex");
-        const newTokenHash = hashToken(newToken);
-
-        await db
+      try {
+        const { data: fingerprintSession } = await db
           .from("sessions")
-          .update({
-            token_hash: newTokenHash,
-            last_seen: new Date().toISOString(),
-          })
-          .eq("id", fingerprintSession.id);
+          .select("*")
+          .eq("fingerprint", fingerprint)
+          .order("last_seen", { ascending: false })
+          .limit(1)
+          .single();
 
-        return NextResponse.json({
-          token: newToken,
-          session_id: fingerprintSession.id,
-          debate_count: fingerprintSession.debate_count,
-          strike_count: fingerprintSession.strike_count,
-          debates_remaining: Math.max(0, 5 - fingerprintSession.debate_count),
-          reattached: true,
-        });
+        if (fingerprintSession) {
+          const newToken = randomBytes(32).toString("hex");
+          const newTokenHash = hashToken(newToken);
+
+          await db
+            .from("sessions")
+            .update({
+              token_hash: newTokenHash,
+              last_seen: new Date().toISOString(),
+            })
+            .eq("id", fingerprintSession.id);
+
+          return NextResponse.json({
+            token: newToken,
+            session_id: fingerprintSession.id,
+            debate_count: fingerprintSession.debate_count,
+            strike_count: fingerprintSession.strike_count,
+            debates_remaining: Math.max(0, 5 - fingerprintSession.debate_count),
+            reattached: true,
+          });
+        }
+      } catch {
+        // fingerprint column likely doesn't exist — skip reattachment
       }
     }
 
@@ -85,14 +97,24 @@ export async function POST(request) {
     const newToken = randomBytes(32).toString("hex");
     const tokenHash = hashToken(newToken);
 
-    const { data: session, error } = await db
+    // Try inserting with fingerprint; fall back without it if column is missing
+    const insertPayload = { token_hash: tokenHash };
+    if (fingerprint) insertPayload.fingerprint = fingerprint;
+
+    let { data: session, error } = await db
       .from("sessions")
-      .insert({
-        token_hash: tokenHash,
-        fingerprint: fingerprint,
-      })
+      .insert(insertPayload)
       .select()
       .single();
+
+    if (error && fingerprint) {
+      // fingerprint column may not exist — retry without it
+      ({ data: session, error } = await db
+        .from("sessions")
+        .insert({ token_hash: tokenHash })
+        .select()
+        .single());
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
