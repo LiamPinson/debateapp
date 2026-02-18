@@ -2224,53 +2224,26 @@ function AboutScreen({ state, dispatch }) {
   return (
     <div className="about-page">
       <h1>About Arena.gg</h1>
-      <p className="about-tagline">Voice-based debate matchmaking. AI-scored. Community-judged. No spectators.</p>
       <div className="about-body">
-        <h2>What is Arena.gg?</h2>
-        <p>Arena.gg pairs you with a random opponent for a live voice debate on a structured topic. After the debate ends, an AI model scores both participants on coherence, engagement, and use of evidence. The community then votes on who won. Rankings climb from Bronze to Diamond.</p>
+        <p className="about-tagline">Save your friendships, spare your spouse - argue with strangers online.</p>
 
-        <h2>How it works</h2>
-        <ol className="about-rules">
-          <li>Choose a category (or go Quick Match for a random topic).</li>
-          <li>Set your time limit — 5, 15, or 45 minutes.</li>
-          <li>Enter the queue. You are matched with the next available opponent.</li>
-          <li>A 90-second prematch lobby gives both sides time to prepare and optionally request a side swap.</li>
-          <li>The debate follows a structured format: opening statements (Pro then Con), free-flow discussion, and closing statements (Con then Pro).</li>
-          <li>After the debate, AI scoring is displayed immediately. You may consent to having your audio transcribed and added to the public transcript archive.</li>
-          <li>Logged-in users can vote on public transcripts.</li>
-        </ol>
+        <p>We all know social media, and now AI as well, is deeply bias confirming, designed to irritate you just enough so you keep scrolling, designed to show the worst of the "other side" so you stay firmly categorized in your group.</p>
 
-        <h2>Scoring</h2>
-        <p>Each debater is scored on three dimensions:</p>
-        <ol className="about-rules">
-          <li><strong>Coherence</strong> — logical structure and argument clarity.</li>
-          <li><strong>Engagement</strong> — responsiveness to the opponent's points.</li>
-          <li><strong>Evidence</strong> — use of facts, examples, and citations.</li>
-        </ol>
-        <p>An overall quality score is derived from these three. Your account quality score is a rolling average that updates after each ranked debate.</p>
+        <p>This website is NOT for everyone. This is a place to scratch an itch, the itch to spar, debate, disagree, with real people, with real issues.</p>
 
-        <h2>Ranked play</h2>
-        <p>Ranked matches require an account. Quality scores map to tiers: Bronze (0–49), Silver (50–69), Gold (70–84), Platinum (85–94), Diamond (95–100). Only ranked debates affect your tier.</p>
+        <h2>A couple things:</h2>
+        <ul className="about-rules">
+          <li>Debates are private rooms — no spectators — like a match with a stranger on chess.com</li>
+          <li>Voice mode only — no video.</li>
+          <li>The transcript will be posted publicly, but the audio file will only be transcribed if BOTH players consent, after the match.</li>
+          <li>Basic rules: Ad-hominem and <em>excess</em> profanity will be penalized. Instances of "bad faith" will be analyzed first by the AI, second by humans, before penalties are issued.</li>
+        </ul>
 
-        <h2>Rules &amp; moderation</h2>
-        <ol className="about-rules">
-          <li>No personal attacks or ad hominem arguments.</li>
-          <li>No slurs or hate speech of any kind.</li>
-          <li>No excessive profanity.</li>
-          <li>Participants must speak — repeated silence triggers a non-participation strike.</li>
-          <li>Three strikes in a session results in a temporary ban.</li>
-        </ol>
+        <p>The goal is not to agree, but to represent your case, test your verbal intelligence, train rhetorical skills, and blow off a little steam.</p>
 
-        <h2>Privacy</h2>
-        <p>Audio is processed only with your explicit consent. If you decline the post-debate consent prompt, your audio is discarded. Transcripts are only published when both participants consent.</p>
+        <p>Registered users are able to vote, one vote per user, on the transcripts page, this community score is the only lasting record of wins and losses.</p>
 
-        <h2>FAQ</h2>
-        <ol className="about-rules">
-          <li><strong>Can I watch ongoing debates?</strong> No. Arena.gg is participant-only. There are no spectators. This keeps the environment focused and reduces performance anxiety.</li>
-          <li><strong>What if my opponent doesn't show up?</strong> If the opponent disconnects during prematch, you will be re-queued automatically.</li>
-          <li><strong>How is the winner determined?</strong> AI scoring produces a winner if one side outscores the other by more than 5 points overall. Otherwise the result is a draw. Community votes are recorded separately and displayed on the transcript page.</li>
-          <li><strong>Is there an API?</strong> Not yet. Public transcripts are available on the Transcripts page.</li>
-        </ol>
+        <p>If you navigate away from the browser window during matchmaking, you will be notified when a match is found, and have 90 seconds to join the room.</p>
       </div>
     </div>
   );
