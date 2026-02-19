@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getDebateSSR } from "@/lib/queries/getDebateSSR";
 import DebateClient from "./DebateClient";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }) {
   const { id: debateId } = params;
   const debate = await getDebateSSR(debateId);
