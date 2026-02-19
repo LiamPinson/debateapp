@@ -27,10 +27,10 @@ export async function GET(request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Get recent debates
+    // Get recent debates with user joins for DebateCard compatibility
     const { data: debates } = await db
       .from("debates")
-      .select("id, topic_id, time_limit, status, winner, winner_source, pro_quality_score, con_quality_score, pro_user_id, con_user_id, created_at, completed_at, topics(title, short_title, category)")
+      .select("id, winner, created_at, completed_at, topics(title, short_title), pro_user:users!pro_user_id(username), con_user:users!con_user_id(username)")
       .or(`pro_user_id.eq.${userId},con_user_id.eq.${userId}`)
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
@@ -65,20 +65,12 @@ export async function GET(request) {
       },
       recent_debates: (debates || []).map((d) => ({
         id: d.id,
-        topic: d.topics?.short_title || d.topics?.title || "Unknown",
-        category: d.topics?.category,
-        time_limit: d.time_limit,
-        side: d.pro_user_id === userId ? "pro" : "con",
-        your_score: d.pro_user_id === userId ? d.pro_quality_score : d.con_quality_score,
+        status: "completed",
+        created_at: d.completed_at || d.created_at,
+        topic_title: d.topics?.short_title || d.topics?.title || null,
+        pro_username: d.pro_user?.username || null,
+        con_username: d.con_user?.username || null,
         winner: d.winner,
-        result:
-          d.winner === "draw"
-            ? "draw"
-            : (d.winner === "pro" && d.pro_user_id === userId) ||
-              (d.winner === "con" && d.con_user_id === userId)
-            ? "win"
-            : "loss",
-        date: d.completed_at || d.created_at,
       })),
       unread_notifications: unreadNotifs || 0,
       pending_challenges: pendingChallenges || 0,

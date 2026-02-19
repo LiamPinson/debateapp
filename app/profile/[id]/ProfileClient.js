@@ -10,6 +10,7 @@ export default function ProfileClient({ initialProfile, profileId }) {
   const { user } = useSession();
   // Start with server-provided data (no loading flash); fetch full data for recent debates
   const [profile, setProfile] = useState(initialProfile || null);
+  const [recentDebates, setRecentDebates] = useState([]);
   const [loading, setLoading] = useState(!initialProfile);
 
   const isOwnProfile = user?.id === profileId;
@@ -18,6 +19,7 @@ export default function ProfileClient({ initialProfile, profileId }) {
     // Always fetch full profile to get recent_debates and latest stats
     getProfile(profileId).then((data) => {
       setProfile(data.user || data);
+      setRecentDebates(data.recent_debates || []);
       setLoading(false);
     });
   }, [profileId]);
@@ -42,7 +44,7 @@ export default function ProfileClient({ initialProfile, profileId }) {
   const wins = profile.wins || 0;
   const losses = profile.losses || 0;
   const draws = profile.draws || 0;
-  const qualityScore = parseFloat(profile.quality_score_avg) || 50;
+  const qualityScore = parseFloat(profile.quality_score || profile.quality_score_avg) || 50;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -96,11 +98,11 @@ export default function ProfileClient({ initialProfile, profileId }) {
       </div>
 
       {/* Recent debates */}
-      {profile.recent_debates?.length > 0 && (
+      {recentDebates.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-4">Recent Debates</h2>
           <div className="space-y-3">
-            {profile.recent_debates.map((debate) => (
+            {recentDebates.map((debate) => (
               <DebateCard key={debate.id} debate={debate} />
             ))}
           </div>
