@@ -60,6 +60,7 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
         stance,
         ranked: ranked && !isGuest,
       });
+      console.log("QUEUE RESPONSE:", JSON.stringify(result));
       if (result.error) {
         setError(result.error);
         setSearching(false);
