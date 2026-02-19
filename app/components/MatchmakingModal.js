@@ -65,7 +65,13 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
         setSearching(false);
         return;
       }
-      setQueueId(result.queueId || result.id);
+      // If match was already found synchronously (second user into queue)
+      if (result.match?.debate_id) {
+        router.push(`/debate/${result.match.debate_id}`);
+        return;
+      }
+      // Otherwise wait for realtime/polling to fire
+      setQueueId(result.queueEntry?.id);
     } catch (err) {
       setError(err.message);
       setSearching(false);
