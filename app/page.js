@@ -1,12 +1,25 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
-import MatchmakingModal from "./components/MatchmakingModal";
+import HomeHero from "./HomeHero";
+
+export const metadata = {
+  title: "Arena.gg — Debate Anyone",
+  description:
+    "Voice-based debates with random opponents. AI-scored. Community-judged.",
+  openGraph: {
+    title: "Arena.gg — Debate Anyone",
+    description:
+      "Voice-based debates with random opponents. AI-scored. Community-judged.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Arena.gg — Debate Anyone",
+    description:
+      "Voice-based debates with random opponents. AI-scored. Community-judged.",
+  },
+};
 
 export default function Home() {
-  const [matchmakingOpen, setMatchmakingOpen] = useState(false);
-
   return (
     <>
       <div className="max-w-6xl mx-auto px-4">
@@ -21,12 +34,7 @@ export default function Home() {
             Climb the ranks from Bronze to Diamond.
           </p>
           <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={() => setMatchmakingOpen(true)}
-              className="px-8 py-3 bg-arena-accent text-white rounded-lg font-semibold hover:bg-arena-accent/80 transition-colors text-lg"
-            >
-              Quick Match
-            </button>
+            <HomeHero />
             <Link
               href="/topics"
               className="px-8 py-3 border border-arena-border rounded-lg font-semibold hover:bg-arena-surface transition-colors text-lg"
@@ -98,8 +106,6 @@ export default function Home() {
           </div>
         </section>
       </div>
-
-      <MatchmakingModal open={matchmakingOpen} onClose={() => setMatchmakingOpen(false)} />
     </>
   );
 }
