@@ -23,9 +23,10 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
     (match) => {
       setSearching(false);
       setQueueId(null);
+      onClose();
       router.push(`/debate/${match.debateId}`);
     },
-    [router]
+    [router, onClose]
   );
 
   useRealtimeMatch(queueId, onMatch);
@@ -68,6 +69,8 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
       }
       // If match was already found synchronously (second user into queue)
       if (result.match?.debate_id) {
+        setSearching(false);
+        onClose();
         router.push(`/debate/${result.match.debate_id}`);
         return;
       }
