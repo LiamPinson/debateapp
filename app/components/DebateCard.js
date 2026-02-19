@@ -9,14 +9,14 @@ export default function DebateCard({ debate }) {
   return (
     <Link
       href={`/debate/${debate.id}`}
-      className="block bg-arena-surface border border-arena-border rounded-lg p-4 hover:border-arena-accent transition-colors"
+      className="block bg-arena-card border border-arena-border rounded-xl p-4 hover:border-arena-accent hover:shadow-sm transition-all"
     >
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-arena-muted">
           {new Date(debate.created_at).toLocaleDateString()}
         </span>
         <span className={`text-xs px-2 py-0.5 rounded-full ${
-          isCompleted ? "bg-emerald-900/30 text-emerald-400" : "bg-yellow-900/30 text-yellow-400"
+          isCompleted ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
         }`}>
           {debate.status}
         </span>

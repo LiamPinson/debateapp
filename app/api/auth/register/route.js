@@ -10,10 +10,14 @@ import { createServiceClient } from "@/lib/supabase";
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { username, email, sessionId } = body;
+    const { username, email, password, sessionId } = body;
 
-    if (!username || !email) {
-      return NextResponse.json({ error: "username and email required" }, { status: 400 });
+    if (!username || !email || !password) {
+      return NextResponse.json({ error: "username, email, and password required" }, { status: 400 });
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
 
     // Validate username
@@ -40,6 +44,7 @@ export async function POST(request) {
     // Create Supabase auth user
     const { data: authData, error: authError } = await db.auth.admin.createUser({
       email,
+      password,
       email_confirm: true, // skip email verification for MVP
       user_metadata: { username },
     });

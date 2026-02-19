@@ -61,12 +61,16 @@ export default async function DebatePage({ params }) {
     notFound();
   }
 
-  // Flatten nested topics join so DebateClient receives the same shape
+  // Flatten nested joins so DebateClient receives the same shape
   // as it gets from getDebateDetail() at runtime
   const flatDebate = {
     ...debate,
     topic_title: debate.topics?.title || debate.topic_title,
     topic_description: debate.topics?.description || debate.topic_description,
+    pro_username: debate.pro_username || debate.pro_user?.username || null,
+    pro_rank_tier: debate.pro_rank_tier || debate.pro_user?.rank_tier || null,
+    con_username: debate.con_username || debate.con_user?.username || null,
+    con_rank_tier: debate.con_rank_tier || debate.con_user?.rank_tier || null,
   };
 
   return <DebateClient initialDebate={flatDebate} params={params} />;

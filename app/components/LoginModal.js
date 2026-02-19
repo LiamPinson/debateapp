@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { useSession } from "@/lib/SessionContext";
+import { loginWithPassword } from "@/lib/api-client";
 import { createBrowserClient } from "@/lib/supabase";
+
+const SESSION_KEY = "debate_session_token";
 
 function GoogleIcon() {
   return (
@@ -15,18 +18,21 @@ function GoogleIcon() {
   );
 }
 
-export default function RegisterModal({ open, onClose }) {
-  const { register, session } = useSession();
-  const [username, setUsername] = useState("");
+export default function LoginModal({ open, onClose }) {
+  const { login } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
-  const debatesUsed = session?.debate_count || 0;
+  const handleClose = () => {
+    setEmail("");
+    setPassword("");
+    setError(null);
+    onClose();
+  };
 
   const handleGoogle = async () => {
     setError(null);
@@ -41,23 +47,17 @@ export default function RegisterModal({ open, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
     setLoading(true);
     try {
-      const result = await register(username, email, password);
+      const result = await loginWithPassword(email, password);
       if (result.error) {
         setError(result.error);
       } else {
-        onClose();
+        if (result.sessionToken) {
+          localStorage.setItem(SESSION_KEY, result.sessionToken);
+        }
+        login(result.user);
+        handleClose();
       }
     } catch (err) {
       setError(err.message);
@@ -69,12 +69,8 @@ export default function RegisterModal({ open, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4">
-        <h2 className="text-xl font-bold mb-2">Create Your Account</h2>
-        <p className="text-sm text-arena-muted mb-4">
-          {debatesUsed >= 5
-            ? "You've used all 5 guest debates. Register to keep debating!"
-            : `${5 - debatesUsed} guest debates remaining. Register for unlimited access.`}
-        </p>
+        <h2 className="text-xl font-bold mb-2">Sign In</h2>
+        <p className="text-sm text-arena-muted mb-4">Enter your email and password to sign in.</p>
 
         <div className="space-y-4">
           <button
@@ -86,25 +82,11 @@ export default function RegisterModal({ open, onClose }) {
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
             <hr className="flex-1 border-arena-border" />
-            or register with email
+            or
             <hr className="flex-1 border-arena-border" />
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                minLength={3}
-                maxLength={24}
-                className="w-full bg-arena-bg border border-arena-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-arena-accent"
-                placeholder="Pick a username"
-              />
-            </div>
-
             <div>
               <label className="block text-sm font-medium mb-1">Email</label>
               <input
@@ -112,6 +94,7 @@ export default function RegisterModal({ open, onClose }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoFocus
                 className="w-full bg-arena-bg border border-arena-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-arena-accent"
                 placeholder="you@example.com"
               />
@@ -124,21 +107,8 @@ export default function RegisterModal({ open, onClose }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
                 className="w-full bg-arena-bg border border-arena-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-arena-accent"
-                placeholder="At least 8 characters"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="w-full bg-arena-bg border border-arena-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-arena-accent"
-                placeholder="Repeat your password"
+                placeholder="••••••••"
               />
             </div>
 
@@ -147,7 +117,7 @@ export default function RegisterModal({ open, onClose }) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="flex-1 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
               >
                 Cancel
@@ -157,7 +127,7 @@ export default function RegisterModal({ open, onClose }) {
                 disabled={loading}
                 className="flex-1 px-4 py-2 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors disabled:opacity-50"
               >
-                {loading ? "Creating..." : "Register"}
+                {loading ? "Signing in..." : "Sign In"}
               </button>
             </div>
           </form>

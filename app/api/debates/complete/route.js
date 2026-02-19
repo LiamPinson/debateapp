@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { createServiceClient } from "@/lib/supabase";
 import { startRecording } from "@/lib/daily";
 import { processDebateCompletion, processDebateForfeit } from "@/lib/pipeline";
+
+export const maxDuration = 300;
 
 /**
  * POST /api/debates/complete
@@ -78,9 +81,12 @@ export async function POST(request) {
             })
             .eq("id", debateId);
 
-          // Trigger async processing pipeline (non-blocking)
-          processDebateCompletion(debateId).catch((err) =>
-            console.error("Pipeline failed:", err)
+          // Trigger async processing pipeline — waitUntil keeps the function alive on Vercel
+          waitUntil(
+            processDebateCompletion(debateId).catch((err) => {
+              console.error("Pipeline failed:", err);
+              db.from("debates").update({ status: "pipeline_failed" }).eq("id", debateId);
+            })
           );
         }
 
@@ -98,9 +104,12 @@ export async function POST(request) {
           })
           .eq("id", debateId);
 
-        // Trigger pipeline
-        processDebateCompletion(debateId).catch((err) =>
-          console.error("Pipeline failed:", err)
+        // Trigger pipeline — waitUntil keeps the function alive on Vercel
+        waitUntil(
+          processDebateCompletion(debateId).catch((err) => {
+            console.error("Pipeline failed:", err);
+            db.from("debates").update({ status: "pipeline_failed" }).eq("id", debateId);
+          })
         );
 
         return NextResponse.json({ success: true });
@@ -112,7 +121,12 @@ export async function POST(request) {
           return NextResponse.json({ error: "side required for forfeit" }, { status: 400 });
         }
 
-        await processDebateForfeit(debateId, side);
+        waitUntil(
+          processDebateForfeit(debateId, side).catch((err) => {
+            console.error("Forfeit pipeline failed:", err);
+            db.from("debates").update({ status: "pipeline_failed" }).eq("id", debateId);
+          })
+        );
         return NextResponse.json({ success: true, forfeited_by: side });
       }
 

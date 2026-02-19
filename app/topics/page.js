@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase";
 import TopicsFilter from "./TopicsFilter";
 
-export const revalidate = 300; // ISR: re-generate at most every 5 minutes
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
   return {

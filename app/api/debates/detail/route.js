@@ -18,7 +18,12 @@ export async function GET(request) {
 
     const { data: debate, error } = await db
       .from("debates")
-      .select("*, topics(title, short_title, category, description)")
+      .select(`
+        *,
+        topics(title, short_title, category, description),
+        pro_user:users!pro_user_id(username, rank_tier),
+        con_user:users!con_user_id(username, rank_tier)
+      `)
       .eq("id", debateId)
       .single();
 
@@ -43,6 +48,13 @@ export async function GET(request) {
     return NextResponse.json({
       debate: {
         ...debate,
+        // Flatten nested user joins
+        topic_title: debate.topics?.title || null,
+        topic_description: debate.topics?.description || null,
+        pro_username: debate.pro_user?.username || null,
+        pro_rank_tier: debate.pro_user?.rank_tier || null,
+        con_username: debate.con_user?.username || null,
+        con_rank_tier: debate.con_user?.rank_tier || null,
         // Strip raw transcript segments from public response (large payload)
         transcript: debate.transcript
           ? { full_text: debate.transcript.full_text, duration: debate.transcript.duration }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { enterQueue, leaveQueue } from "@/lib/api-client";
@@ -8,7 +8,7 @@ import { useRealtimeMatch, useMatchPolling } from "@/lib/useRealtime";
 
 export default function MatchmakingModal({ open, onClose, topic = null }) {
   const router = useRouter();
-  const { user, session } = useSession();
+  const { user, session, loading: sessionLoading } = useSession();
   const [timeLimit, setTimeLimit] = useState(15);
   const [stance, setStance] = useState("either");
   const [ranked, setRanked] = useState(false);
@@ -32,7 +32,7 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
   useMatchPolling(queueId, onMatch);
 
   // Elapsed timer
-  useState(() => {
+  useEffect(() => {
     if (!searching) return;
     const interval = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(interval);
@@ -40,6 +40,10 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
 
   const handleSearch = async () => {
     setError(null);
+    if (sessionLoading) {
+      setError("Loading session… please wait a moment.");
+      return;
+    }
     if (!user?.id && !session?.session_id) {
       setError("Session not ready — please refresh the page.");
       return;
@@ -185,9 +189,10 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
                 </button>
                 <button
                   onClick={handleSearch}
-                  className="flex-1 px-4 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors"
+                  disabled={sessionLoading}
+                  className="flex-1 px-4 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors disabled:opacity-50"
                 >
-                  Find Match
+                  {sessionLoading ? "Loading..." : "Find Match"}
                 </button>
               </div>
             </div>

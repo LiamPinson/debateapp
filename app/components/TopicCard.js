@@ -1,13 +1,13 @@
 "use client";
 
 const CATEGORY_COLORS = {
-  politics: "bg-blue-900/40 text-blue-400",
-  economics: "bg-emerald-900/40 text-emerald-400",
-  philosophy: "bg-orange-900/40 text-orange-400",
-  science: "bg-cyan-900/40 text-cyan-400",
-  culture: "bg-pink-900/40 text-pink-400",
-  silly: "bg-yellow-900/40 text-yellow-400",
-  fantasy: "bg-orange-900/40 text-orange-400",
+  politics: "bg-blue-100 text-blue-700",
+  economics: "bg-emerald-100 text-emerald-700",
+  philosophy: "bg-amber-100 text-amber-700",
+  science: "bg-cyan-100 text-cyan-700",
+  culture: "bg-pink-100 text-pink-700",
+  silly: "bg-yellow-100 text-yellow-700",
+  fantasy: "bg-violet-100 text-violet-700",
 };
 
 export default function TopicCard({ topic, onClick }) {
@@ -16,7 +16,7 @@ export default function TopicCard({ topic, onClick }) {
   return (
     <button
       onClick={() => onClick?.(topic)}
-      className="w-full text-left bg-arena-surface border border-arena-border rounded-lg p-4 hover:border-arena-accent transition-colors group"
+      className="w-full text-left bg-arena-card border border-arena-border rounded-xl p-4 hover:border-arena-accent hover:shadow-sm transition-all group"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${catColor}`}>

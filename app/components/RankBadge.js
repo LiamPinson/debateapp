@@ -1,11 +1,11 @@
 "use client";
 
 const RANK_STYLES = {
-  Bronze: "bg-amber-900/30 text-amber-400 border-amber-700",
-  Silver: "bg-gray-700/30 text-gray-300 border-gray-500",
-  Gold: "bg-yellow-900/30 text-yellow-400 border-yellow-600",
-  Platinum: "bg-cyan-900/30 text-cyan-400 border-cyan-600",
-  Diamond: "bg-violet-900/30 text-violet-400 border-violet-600",
+  Bronze: "bg-amber-100 text-amber-700 border-amber-300",
+  Silver: "bg-gray-100 text-gray-600 border-gray-300",
+  Gold: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  Platinum: "bg-cyan-100 text-cyan-700 border-cyan-300",
+  Diamond: "bg-violet-100 text-violet-700 border-violet-300",
 };
 
 const RANK_THRESHOLDS = { Bronze: 0, Silver: 50, Gold: 70, Platinum: 85, Diamond: 95 };

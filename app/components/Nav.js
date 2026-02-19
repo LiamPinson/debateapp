@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useSession } from "@/lib/SessionContext";
 import NotificationDropdown from "./NotificationDropdown";
 import RegisterModal from "./RegisterModal";
+import LoginModal from "./LoginModal";
 import RankBadge from "./RankBadge";
 
 export default function Nav() {
-  const { user, session, loading } = useSession();
+  const { user, session, loading, logout } = useSession();
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isGuest = !user;
@@ -52,6 +54,12 @@ export default function Nav() {
                         : "No debates remaining"}
                     </span>
                     <button
+                      onClick={() => setLoginOpen(true)}
+                      className="text-sm text-arena-muted hover:text-arena-text transition-colors"
+                    >
+                      Sign In
+                    </button>
+                    <button
                       onClick={() => setRegisterOpen(true)}
                       className="px-3 py-1.5 bg-arena-accent text-white text-sm rounded-lg font-medium hover:bg-arena-accent/80 transition-colors"
                     >
@@ -84,10 +92,7 @@ export default function Nav() {
                           Profile
                         </Link>
                         <button
-                          onClick={() => {
-                            setMenuOpen(false);
-                            // logout handled elsewhere if needed
-                          }}
+                          onClick={() => { setMenuOpen(false); logout(); }}
                           className="block w-full text-left px-4 py-2 text-sm text-arena-con hover:bg-arena-border/30"
                         >
                           Sign Out
@@ -113,6 +118,7 @@ export default function Nav() {
       </nav>
 
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
   );
 }

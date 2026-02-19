@@ -66,10 +66,10 @@ export default function PhaseTimer({ phase, timeLimit, onTimeUp }) {
 
       <div className="relative w-28 h-28">
         <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="44" fill="none" stroke="#334155" strokeWidth="6" />
+          <circle cx="50" cy="50" r="44" fill="none" stroke="var(--color-arena-border)" strokeWidth="6" />
           <circle
             cx="50" cy="50" r="44" fill="none"
-            stroke={urgent ? "#ef4444" : "#ea580c"}
+            stroke={urgent ? "var(--color-arena-con)" : "var(--color-arena-accent)"}
             strokeWidth="6"
             strokeLinecap="round"
             strokeDasharray={`${2 * Math.PI * 44}`}
@@ -78,7 +78,7 @@ export default function PhaseTimer({ phase, timeLimit, onTimeUp }) {
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-2xl font-mono font-bold ${urgent ? "text-red-400 animate-pulse" : ""}`}>
+          <span className={`text-2xl font-mono font-bold ${urgent ? "text-arena-con animate-pulse" : ""}`}>
             {mins}:{secs.toString().padStart(2, "0")}
           </span>
         </div>
