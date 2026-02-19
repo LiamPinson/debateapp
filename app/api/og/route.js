@@ -48,7 +48,7 @@ export async function GET(request) {
           flexDirection: "column",
           width: "100%",
           height: "100%",
-          backgroundColor: "#0d0d0f",
+          backgroundColor: "#FAF8F5",
           padding: "48px 56px",
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
@@ -66,7 +66,7 @@ export async function GET(request) {
             style={{
               fontSize: "26px",
               fontWeight: "800",
-              color: "#6366f1",
+              color: "#FF6B35",
               letterSpacing: "-0.5px",
             }}
           >
@@ -108,13 +108,13 @@ export async function GET(request) {
             {category && (
               <div
                 style={{
-                  backgroundColor: "#6366f115",
-                  border: "1px solid #6366f130",
+                  backgroundColor: "#FF6B3515",
+                  border: "1px solid #FF6B3530",
                   borderRadius: "20px",
                   padding: "6px 16px",
                   fontSize: "13px",
                   fontWeight: "600",
-                  color: "#a5b4fc",
+                  color: "#FF6B35",
                 }}
               >
                 {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -128,7 +128,7 @@ export async function GET(request) {
           style={{
             fontSize: "13px",
             fontWeight: "600",
-            color: "#6b7280",
+            color: "#6B7280",
             letterSpacing: "0.08em",
             marginBottom: "10px",
           }}
@@ -139,7 +139,7 @@ export async function GET(request) {
           style={{
             fontSize: topicTitle.length > 60 ? "32px" : "40px",
             fontWeight: "700",
-            color: "#f0f0f5",
+            color: "#1A1A1A",
             lineHeight: "1.2",
             marginBottom: "36px",
             flex: 1,
@@ -154,8 +154,8 @@ export async function GET(request) {
           <div
             style={{
               flex: 1,
-              backgroundColor: "#16201a",
-              border: `1px solid ${winner === "pro" ? "#22c55e" : "#22c55e30"}`,
+              backgroundColor: "#FFFFFF",
+              border: `1px solid ${winner === "pro" ? "#22c55e" : "#E8DDD0"}`,
               borderRadius: "16px",
               padding: "20px 24px",
               display: "flex",
@@ -197,13 +197,13 @@ export async function GET(request) {
               style={{
                 fontSize: "22px",
                 fontWeight: "700",
-                color: "#f0f0f5",
+                color: "#1A1A1A",
               }}
             >
               {proName}
             </div>
             {proRank && (
-              <div style={{ fontSize: "13px", color: "#9ca3af" }}>{proRank}</div>
+              <div style={{ fontSize: "13px", color: "#9CA3AF" }}>{proRank}</div>
             )}
             {proScore && (
               <div
@@ -226,7 +226,7 @@ export async function GET(request) {
               alignItems: "center",
               fontSize: "20px",
               fontWeight: "700",
-              color: "#4b5563",
+              color: "#9CA3AF",
               padding: "0 4px",
             }}
           >
@@ -237,8 +237,8 @@ export async function GET(request) {
           <div
             style={{
               flex: 1,
-              backgroundColor: "#1f1515",
-              border: `1px solid ${winner === "con" ? "#ef4444" : "#ef444430"}`,
+              backgroundColor: "#FFFFFF",
+              border: `1px solid ${winner === "con" ? "#ef4444" : "#E8DDD0"}`,
               borderRadius: "16px",
               padding: "20px 24px",
               display: "flex",
@@ -280,13 +280,13 @@ export async function GET(request) {
               style={{
                 fontSize: "22px",
                 fontWeight: "700",
-                color: "#f0f0f5",
+                color: "#1A1A1A",
               }}
             >
               {conName}
             </div>
             {conRank && (
-              <div style={{ fontSize: "13px", color: "#9ca3af" }}>{conRank}</div>
+              <div style={{ fontSize: "13px", color: "#9CA3AF" }}>{conRank}</div>
             )}
             {conScore && (
               <div
@@ -308,8 +308,8 @@ export async function GET(request) {
           <div
             style={{
               marginTop: "20px",
-              backgroundColor: "#6366f115",
-              border: "1px solid #6366f130",
+              backgroundColor: "#FF6B3515",
+              border: "1px solid #FF6B3530",
               borderRadius: "12px",
               padding: "12px 24px",
               textAlign: "center",
@@ -321,7 +321,7 @@ export async function GET(request) {
               style={{
                 fontSize: "16px",
                 fontWeight: "700",
-                color: "#a5b4fc",
+                color: "#FF6B35",
               }}
             >
               Draw — Both debaters performed equally

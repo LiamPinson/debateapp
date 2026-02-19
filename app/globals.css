@@ -1,20 +1,22 @@
 @import "tailwindcss";
 
 @theme {
-  --color-arena-bg: #0f172a;
-  --color-arena-surface: #1e293b;
-  --color-arena-border: #334155;
-  --color-arena-text: #f8fafc;
-  --color-arena-muted: #94a3b8;
-  --color-arena-pro: #10b981;
-  --color-arena-con: #ef4444;
-  --color-arena-accent: #ea580c;
+  --color-arena-bg:       #FAF8F5;
+  --color-arena-surface:  #F3EDE6;
+  --color-arena-card:     #FFFFFF;
+  --color-arena-border:   #E8DDD0;
+  --color-arena-text:     #1A1A1A;
+  --color-arena-text-dim: #6B7280;
+  --color-arena-muted:    #9CA3AF;
+  --color-arena-pro:      #22C55E;
+  --color-arena-con:      #EF4444;
+  --color-arena-accent:   #FF6B35;
 }
 
 body {
   background-color: var(--color-arena-bg);
   color: var(--color-arena-text);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Ruluko', system-ui, -apple-system, sans-serif;
 }
 
 /* Scrollbar styling */

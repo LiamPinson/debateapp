@@ -33,7 +33,7 @@ export async function GET(request) {
     Platinum: "#67e8f9",
     Diamond: "#818cf8",
   };
-  const rankColor = rankColors[rankTier] || "#6366f1";
+  const rankColor = rankColors[rankTier] || "#FF6B35";
 
   const image = new ImageResponse(
     (
@@ -43,7 +43,7 @@ export async function GET(request) {
           flexDirection: "column",
           width: "100%",
           height: "100%",
-          backgroundColor: "#0d0d0f",
+          backgroundColor: "#FAF8F5",
           padding: "56px 64px",
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
@@ -61,7 +61,7 @@ export async function GET(request) {
             style={{
               fontSize: "24px",
               fontWeight: "800",
-              color: "#6366f1",
+              color: "#FF6B35",
             }}
           >
             Arena.gg
@@ -95,14 +95,14 @@ export async function GET(request) {
               width: "96px",
               height: "96px",
               borderRadius: "50%",
-              backgroundColor: "#6366f120",
-              border: "2px solid #6366f140",
+              backgroundColor: "#FF6B3520",
+              border: "2px solid #FF6B3540",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: "40px",
               fontWeight: "800",
-              color: "#6366f1",
+              color: "#FF6B35",
             }}
           >
             {username[0].toUpperCase()}
@@ -111,7 +111,7 @@ export async function GET(request) {
             <div
               style={{
                 fontSize: "14px",
-                color: "#6b7280",
+                color: "#6B7280",
                 fontWeight: "500",
               }}
             >
@@ -121,7 +121,7 @@ export async function GET(request) {
               style={{
                 fontSize: "42px",
                 fontWeight: "800",
-                color: "#f0f0f5",
+                color: "#1A1A1A",
                 lineHeight: "1",
               }}
             >
@@ -133,17 +133,17 @@ export async function GET(request) {
         {/* Stats row */}
         <div style={{ display: "flex", gap: "20px", flex: 1 }}>
           {[
-            { label: "Debates", value: totalDebates, color: "#f0f0f5" },
+            { label: "Debates", value: totalDebates, color: "#1A1A1A" },
             { label: "Wins", value: wins, color: "#22c55e" },
             { label: "Losses", value: losses, color: "#ef4444" },
-            { label: "Draws", value: draws, color: "#9ca3af" },
+            { label: "Draws", value: draws, color: "#9CA3AF" },
           ].map((stat) => (
             <div
               key={stat.label}
               style={{
                 flex: 1,
-                backgroundColor: "#1a1a1f",
-                border: "1px solid #2a2a35",
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #E8DDD0",
                 borderRadius: "16px",
                 padding: "20px",
                 display: "flex",
@@ -161,7 +161,7 @@ export async function GET(request) {
               >
                 {stat.value}
               </div>
-              <div style={{ fontSize: "13px", color: "#6b7280", fontWeight: "500" }}>
+              <div style={{ fontSize: "13px", color: "#6B7280", fontWeight: "500" }}>
                 {stat.label}
               </div>
             </div>
@@ -177,14 +177,14 @@ export async function GET(request) {
             gap: "16px",
           }}
         >
-          <div style={{ fontSize: "14px", color: "#6b7280", fontWeight: "500", minWidth: "120px" }}>
+          <div style={{ fontSize: "14px", color: "#6B7280", fontWeight: "500", minWidth: "120px" }}>
             Quality Score
           </div>
           <div
             style={{
               flex: 1,
               height: "10px",
-              backgroundColor: "#1a1a1f",
+              backgroundColor: "#E8DDD0",
               borderRadius: "5px",
               overflow: "hidden",
             }}
@@ -193,7 +193,7 @@ export async function GET(request) {
               style={{
                 width: `${qualityScore}%`,
                 height: "100%",
-                backgroundColor: "#6366f1",
+                backgroundColor: "#FF6B35",
                 borderRadius: "5px",
               }}
             />
@@ -202,7 +202,7 @@ export async function GET(request) {
             style={{
               fontSize: "20px",
               fontWeight: "700",
-              color: "#6366f1",
+              color: "#FF6B35",
               minWidth: "48px",
               textAlign: "right",
             }}
