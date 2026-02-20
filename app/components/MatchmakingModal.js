@@ -20,10 +20,11 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
   const isGuest = !user;
 
   const onMatch = useCallback(
-    (match) => {
+    async (match) => {
       setSearching(false);
       setQueueId(null);
       onClose();
+      await new Promise((r) => setTimeout(r, 1000));
       router.push(`/debate/${match.debateId}`);
     },
     [router, onClose]
@@ -71,6 +72,7 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
       if (result.match?.debate_id) {
         setSearching(false);
         onClose();
+        await new Promise((r) => setTimeout(r, 1000));
         router.push(`/debate/${result.match.debate_id}`);
         return;
       }

@@ -60,10 +60,8 @@ export default async function DebatePage({ params }) {
 
   let debate;
   try {
-    debate = await getDebateSSR(debateId);
-    if (!debate) {
-      // The redirect can arrive before the DB insert propagates — retry once
-      await new Promise((r) => setTimeout(r, 500));
+    for (let attempt = 0; attempt < 3 && !debate; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1000));
       debate = await getDebateSSR(debateId);
     }
   } catch (err) {
