@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { useRealtimeDebate } from "@/lib/useRealtime";
@@ -22,7 +22,15 @@ import RankBadge from "../../components/RankBadge";
 import ScoreBar from "../../components/ScoreBar";
 import VoteBar from "../../components/VoteBar";
 
-const PHASE_ORDER = ["prematch", "opening_pro", "opening_con", "freeflow", "closing_con", "closing_pro", "ended"];
+const PHASE_ORDER = [
+  "prematch",
+  "opening_pro",
+  "opening_con",
+  "freeflow",
+  "closing_con",
+  "closing_pro",
+  "ended",
+];
 
 export default function DebateClient({ initialDebate, params }) {
   const { id: debateId } = params;
@@ -31,15 +39,23 @@ export default function DebateClient({ initialDebate, params }) {
   const [debate, setDebate] = useState(initialDebate || null);
   const [loading, setLoading] = useState(!initialDebate);
   const [dailyToken, setDailyToken] = useState(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
   const [forfeitConfirm, setForfeitConfirm] = useState(false);
   const [votes, setVotes] = useState(null);
   const [voted, setVoted] = useState(false);
 
+  // ── Mutual readiness state ──
+  const [myReady, setMyReady] = useState(false);
+  const [opponentReady, setOpponentReady] = useState(false);
+  const readyChannelRef = useRef(null);
+
   // Determine which side the current user is on
   const mySide =
-    debate?.pro_user_id === user?.id || debate?.pro_session_id === session?.id
+    debate?.pro_user_id === user?.id ||
+    debate?.pro_session_id === session?.session_id
       ? "pro"
-      : debate?.con_user_id === user?.id || debate?.con_session_id === session?.id
+      : debate?.con_user_id === user?.id ||
+        debate?.con_session_id === session?.session_id
       ? "con"
       : null;
 
@@ -58,20 +74,33 @@ export default function DebateClient({ initialDebate, params }) {
   }, []);
   useRealtimeDebate(debateId, onDebateChange);
 
-  // Get Daily.co token when debate is in_progress
+  // ── FIX 3: Pre-fetch Daily.co token as soon as we know our side ──
+  // Don't wait for in_progress — fetch during prematch so audio connects instantly on start.
   useEffect(() => {
-    if (!debate || debate.status !== "in_progress" || dailyToken) return;
+    if (!debate || dailyToken || tokenLoading) return;
     if (!mySide) return;
-    getDailyToken(debateId, user?.id, session?.id, mySide).then((data) => {
-      setDailyToken(data);
-    });
-  }, [debate?.status, debateId, user?.id, session?.id, mySide, dailyToken]);
+    // Fetch token for prematch or in_progress (not completed/forfeited)
+    if (debate.status !== "prematch" && debate.status !== "in_progress") return;
 
-  // Daily.co audio
+    setTokenLoading(true);
+    getDailyToken(debateId, user?.id, session?.session_id, mySide)
+      .then((data) => {
+        if (data && !data.error) {
+          setDailyToken(data);
+        } else {
+          console.error("Token fetch error:", data?.error);
+        }
+      })
+      .catch((err) => console.error("Token fetch failed:", err))
+      .finally(() => setTokenLoading(false));
+  }, [debate?.status, debateId, user?.id, session?.session_id, mySide, dailyToken, tokenLoading]);
+
+  // Daily.co audio — auto-join when we have a token AND debate is in_progress
+  // During prematch we hold the token but don't join yet (no need to burn Daily minutes).
   const daily = useDaily({
-    roomUrl: dailyToken?.roomUrl || dailyToken?.room_url || "",
+    roomUrl: dailyToken?.room_url || "",
     token: dailyToken?.token || "",
-    autoJoin: !!dailyToken?.token,
+    autoJoin: !!dailyToken?.token && debate?.status === "in_progress",
   });
 
   // Load votes for completed debates
@@ -81,14 +110,54 @@ export default function DebateClient({ initialDebate, params }) {
     }
   }, [debate?.status, debateId]);
 
+  // ── FIX 4: Mutual readiness via Supabase Realtime broadcast channel ──
+  useEffect(() => {
+    if (!debateId || !mySide || debate?.status !== "prematch") return;
+
+    let channel;
+    import("@/lib/supabase").then(({ createBrowserClient }) => {
+      const supabase = createBrowserClient();
+      channel = supabase.channel(`ready:${debateId}`, {
+        config: { broadcast: { self: true } },
+      });
+
+      channel
+        .on("broadcast", { event: "ready" }, (payload) => {
+          const { side } = payload.payload;
+          if (side !== mySide) {
+            setOpponentReady(true);
+          }
+        })
+        .subscribe();
+
+      readyChannelRef.current = channel;
+    });
+
+    return () => {
+      if (readyChannelRef.current) {
+        readyChannelRef.current.unsubscribe();
+        readyChannelRef.current = null;
+      }
+    };
+  }, [debateId, mySide, debate?.status]);
+
+  // When both sides are ready, the first to detect it starts the debate
+  useEffect(() => {
+    if (myReady && opponentReady && debate?.status === "prematch") {
+      startDebate(debateId);
+    }
+  }, [myReady, opponentReady, debate?.status, debateId]);
+
   // Phase advance handler
   const handleTimeUp = useCallback(async () => {
     if (!debate || !mySide) return;
     const currentIdx = PHASE_ORDER.indexOf(debate.phase);
     const nextPhase = PHASE_ORDER[currentIdx + 1];
+    if (!nextPhase) return;
+
     if (nextPhase === "ended") {
       await completeDebate(debateId);
-    } else if (nextPhase) {
+    } else {
       await advancePhase(debateId, nextPhase);
     }
   }, [debate, debateId, mySide]);
@@ -108,9 +177,16 @@ export default function DebateClient({ initialDebate, params }) {
     getVoteTally(debateId).then((data) => setVotes(data));
   };
 
-  // Ready / Start
-  const handleStart = async () => {
-    await startDebate(debateId);
+  // Ready handler — broadcasts readiness and triggers start when both ready
+  const handleReady = () => {
+    setMyReady(true);
+    if (readyChannelRef.current) {
+      readyChannelRef.current.send({
+        type: "broadcast",
+        event: "ready",
+        payload: { side: mySide },
+      });
+    }
   };
 
   // Side swap
@@ -141,50 +217,118 @@ export default function DebateClient({ initialDebate, params }) {
       <div className="max-w-2xl mx-auto px-4 py-12">
         <div className="bg-arena-surface border border-arena-border rounded-xl p-8 text-center">
           <p className="text-sm text-arena-muted mb-2">Prematch Lobby</p>
-          <h2 className="text-2xl font-bold mb-6">{debate.topic_title || "Quick Match"}</h2>
+          <h2 className="text-2xl font-bold mb-6">
+            {debate.topic_title || "Quick Match"}
+          </h2>
           {debate.topic_description && (
-            <p className="text-sm text-arena-muted mb-6">{debate.topic_description}</p>
+            <p className="text-sm text-arena-muted mb-6">
+              {debate.topic_description}
+            </p>
           )}
 
           <div className="flex items-center justify-center gap-8 mb-8">
             {/* Pro side */}
-            <div className={`text-center ${mySide === "pro" ? "ring-2 ring-arena-pro rounded-xl p-4" : "p-4"}`}>
+            <div
+              className={`text-center ${
+                mySide === "pro"
+                  ? "ring-2 ring-arena-pro rounded-xl p-4"
+                  : "p-4"
+              }`}
+            >
               <div className="w-16 h-16 bg-arena-pro/20 rounded-full flex items-center justify-center mx-auto mb-2">
                 <span className="text-2xl font-bold text-arena-pro">P</span>
               </div>
               <p className="font-semibold text-arena-pro">Pro</p>
-              <p className="text-sm">{debate.pro_username || "Guest"}</p>
-              {debate.pro_rank_tier && <RankBadge rank={debate.pro_rank_tier} />}
-              {mySide === "pro" && <p className="text-xs text-arena-muted mt-1">You</p>}
+              <p className="text-sm">
+                {debate.pro_username || "Guest"}
+              </p>
+              {debate.pro_rank_tier && (
+                <RankBadge rank={debate.pro_rank_tier} />
+              )}
+              {mySide === "pro" && (
+                <p className="text-xs text-arena-muted mt-1">You</p>
+              )}
+              {/* Ready indicator for pro */}
+              {(mySide === "pro" ? myReady : opponentReady) && (
+                <p className="text-xs text-green-400 mt-1 font-medium">
+                  ✓ Ready
+                </p>
+              )}
             </div>
 
             <span className="text-2xl font-bold text-arena-muted">VS</span>
 
             {/* Con side */}
-            <div className={`text-center ${mySide === "con" ? "ring-2 ring-arena-con rounded-xl p-4" : "p-4"}`}>
+            <div
+              className={`text-center ${
+                mySide === "con"
+                  ? "ring-2 ring-arena-con rounded-xl p-4"
+                  : "p-4"
+              }`}
+            >
               <div className="w-16 h-16 bg-arena-con/20 rounded-full flex items-center justify-center mx-auto mb-2">
                 <span className="text-2xl font-bold text-arena-con">C</span>
               </div>
               <p className="font-semibold text-arena-con">Con</p>
-              <p className="text-sm">{debate.con_username || "Guest"}</p>
-              {debate.con_rank_tier && <RankBadge rank={debate.con_rank_tier} />}
-              {mySide === "con" && <p className="text-xs text-arena-muted mt-1">You</p>}
+              <p className="text-sm">
+                {debate.con_username || "Guest"}
+              </p>
+              {debate.con_rank_tier && (
+                <RankBadge rank={debate.con_rank_tier} />
+              )}
+              {mySide === "con" && (
+                <p className="text-xs text-arena-muted mt-1">You</p>
+              )}
+              {/* Ready indicator for con */}
+              {(mySide === "con" ? myReady : opponentReady) && (
+                <p className="text-xs text-green-400 mt-1 font-medium">
+                  ✓ Ready
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Token pre-fetch status */}
+          {tokenLoading && (
+            <p className="text-xs text-arena-muted mb-4">
+              Preparing audio connection...
+            </p>
+          )}
+
           <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={handleSwap}
-              className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-            >
-              Swap Sides
-            </button>
-            <button
-              onClick={handleStart}
-              className="px-8 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors"
-            >
-              Ready — Start Debate
-            </button>
+            {!myReady && (
+              <>
+                <button
+                  onClick={handleSwap}
+                  className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+                >
+                  Swap Sides
+                </button>
+                <button
+                  onClick={handleReady}
+                  disabled={!mySide}
+                  className="px-8 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors disabled:opacity-50"
+                >
+                  Ready
+                </button>
+              </>
+            )}
+            {myReady && !opponentReady && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 border-3 border-arena-accent border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-arena-muted">
+                  Waiting for opponent to ready up...
+                </p>
+              </div>
+            )}
+            {myReady && opponentReady && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-8 h-8 border-3 border-green-400 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-green-400 font-medium">
+                  Starting debate...
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -193,19 +337,50 @@ export default function DebateClient({ initialDebate, params }) {
 
   // ─── LIVE DEBATE ─────────────────────────────────────
   if (debate.status === "in_progress") {
-    const currentSpeaker = debate.phase?.includes("pro") ? "pro" : debate.phase?.includes("con") ? "con" : "both";
+    const currentSpeaker = debate.phase?.includes("pro")
+      ? "pro"
+      : debate.phase?.includes("con")
+      ? "con"
+      : "both";
+
+    // Map audio levels to pro/con sides.
+    // daily.audioLevels is keyed by participant ID. Local is always "local".
+    // We map: local participant → mySide, remote participant → opponent side.
+    const participantIds = Object.keys(daily.audioLevels || {});
+    const localId = participantIds.find(
+      (id) => daily.participants[id]?.local
+    );
+    const remoteId = participantIds.find(
+      (id) => !daily.participants[id]?.local
+    );
+
+    const proLevel =
+      mySide === "pro"
+        ? daily.audioLevels[localId] || 0
+        : daily.audioLevels[remoteId] || 0;
+    const conLevel =
+      mySide === "con"
+        ? daily.audioLevels[localId] || 0
+        : daily.audioLevels[remoteId] || 0;
 
     return (
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Top bar: topic + phase */}
         <div className="text-center mb-6">
-          <h2 className="text-lg font-bold">{debate.topic_title || "Quick Match"}</h2>
+          <h2 className="text-lg font-bold">
+            {debate.topic_title || "Quick Match"}
+          </h2>
           <div className="flex items-center justify-center gap-2 mt-1">
             {PHASE_ORDER.filter((p) => p !== "prematch").map((p) => (
               <div
                 key={p}
                 className={`w-2 h-2 rounded-full ${
-                  p === debate.phase ? "bg-arena-accent" : PHASE_ORDER.indexOf(p) < PHASE_ORDER.indexOf(debate.phase) ? "bg-arena-accent/40" : "bg-arena-border"
+                  p === debate.phase
+                    ? "bg-arena-accent"
+                    : PHASE_ORDER.indexOf(p) <
+                      PHASE_ORDER.indexOf(debate.phase)
+                    ? "bg-arena-accent/40"
+                    : "bg-arena-border"
                 }`}
               />
             ))}
@@ -224,40 +399,54 @@ export default function DebateClient({ initialDebate, params }) {
         {/* Debaters */}
         <div className="grid grid-cols-2 gap-6 mb-8">
           {/* Pro */}
-          <div className={`bg-arena-surface border rounded-xl p-4 ${
-            currentSpeaker === "pro" || currentSpeaker === "both" ? "border-arena-pro" : "border-arena-border"
-          }`}>
+          <div
+            className={`bg-arena-surface border rounded-xl p-4 ${
+              currentSpeaker === "pro" || currentSpeaker === "both"
+                ? "border-arena-pro"
+                : "border-arena-border"
+            }`}
+          >
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="text-xs font-semibold text-arena-pro">PRO</span>
-                <p className="font-medium text-sm">{debate.pro_username || "Guest"}</p>
+                <span className="text-xs font-semibold text-arena-pro">
+                  PRO
+                </span>
+                <p className="font-medium text-sm">
+                  {debate.pro_username || "Guest"}
+                </p>
               </div>
-              <AudioLevelBar
-                level={Object.values(daily.audioLevels)[0] || 0}
-                side="pro"
-              />
+              <AudioLevelBar level={proLevel} side="pro" />
             </div>
             {(currentSpeaker === "pro" || currentSpeaker === "both") && (
-              <p className="text-xs text-arena-pro animate-pulse">Speaking...</p>
+              <p className="text-xs text-arena-pro animate-pulse">
+                Speaking...
+              </p>
             )}
           </div>
 
           {/* Con */}
-          <div className={`bg-arena-surface border rounded-xl p-4 ${
-            currentSpeaker === "con" || currentSpeaker === "both" ? "border-arena-con" : "border-arena-border"
-          }`}>
+          <div
+            className={`bg-arena-surface border rounded-xl p-4 ${
+              currentSpeaker === "con" || currentSpeaker === "both"
+                ? "border-arena-con"
+                : "border-arena-border"
+            }`}
+          >
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="text-xs font-semibold text-arena-con">CON</span>
-                <p className="font-medium text-sm">{debate.con_username || "Guest"}</p>
+                <span className="text-xs font-semibold text-arena-con">
+                  CON
+                </span>
+                <p className="font-medium text-sm">
+                  {debate.con_username || "Guest"}
+                </p>
               </div>
-              <AudioLevelBar
-                level={Object.values(daily.audioLevels)[1] || 0}
-                side="con"
-              />
+              <AudioLevelBar level={conLevel} side="con" />
             </div>
             {(currentSpeaker === "con" || currentSpeaker === "both") && (
-              <p className="text-xs text-arena-con animate-pulse">Speaking...</p>
+              <p className="text-xs text-arena-con animate-pulse">
+                Speaking...
+              </p>
             )}
           </div>
         </div>
@@ -314,21 +503,37 @@ export default function DebateClient({ initialDebate, params }) {
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <p className="text-sm text-arena-muted mb-1">Debate Results</p>
-          <h2 className="text-2xl font-bold">{debate.topic_title || "Quick Match"}</h2>
+          <h2 className="text-2xl font-bold">
+            {debate.topic_title || "Quick Match"}
+          </h2>
         </div>
 
         {/* Winner banner */}
         {debate.winner && (
-          <div className={`text-center py-4 rounded-xl mb-8 ${
-            debate.winner === "pro" ? "bg-arena-pro/10 border border-arena-pro/30" :
-            debate.winner === "con" ? "bg-arena-con/10 border border-arena-con/30" :
-            "bg-arena-accent/10 border border-arena-accent/30"
-          }`}>
+          <div
+            className={`text-center py-4 rounded-xl mb-8 ${
+              debate.winner === "pro"
+                ? "bg-arena-pro/10 border border-arena-pro/30"
+                : debate.winner === "con"
+                ? "bg-arena-con/10 border border-arena-con/30"
+                : "bg-arena-accent/10 border border-arena-accent/30"
+            }`}
+          >
             <p className="text-lg font-bold">
-              {debate.winner === "draw" ? "Draw!" : `${debate.winner === "pro" ? debate.pro_username || "Pro" : debate.con_username || "Con"} Wins!`}
+              {debate.winner === "draw"
+                ? "Draw!"
+                : `${
+                    debate.winner === "pro"
+                      ? debate.pro_username || "Pro"
+                      : debate.con_username || "Con"
+                  } Wins!`}
             </p>
             <p className="text-xs text-arena-muted">
-              {debate.winner_source === "forfeit" ? "by forfeit" : debate.winner_source === "ai" ? "AI decision" : "community vote"}
+              {debate.winner_source === "forfeit"
+                ? "by forfeit"
+                : debate.winner_source === "ai"
+                ? "AI decision"
+                : "community vote"}
             </p>
           </div>
         )}
@@ -338,16 +543,34 @@ export default function DebateClient({ initialDebate, params }) {
           <div className="bg-arena-surface border border-arena-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <span className="text-xs font-semibold text-arena-pro">PRO</span>
-                <p className="font-medium">{debate.pro_username || "Guest"}</p>
+                <span className="text-xs font-semibold text-arena-pro">
+                  PRO
+                </span>
+                <p className="font-medium">
+                  {debate.pro_username || "Guest"}
+                </p>
               </div>
-              <span className="text-3xl font-bold text-arena-pro">{proScore.toFixed(1)}</span>
+              <span className="text-3xl font-bold text-arena-pro">
+                {proScore.toFixed(1)}
+              </span>
             </div>
             {analysis?.pro && (
               <div className="space-y-2">
-                <ScoreBar label="Coherence" score={analysis.pro.coherence || 0} color="pro" />
-                <ScoreBar label="Evidence" score={analysis.pro.evidence || 0} color="pro" />
-                <ScoreBar label="Engagement" score={analysis.pro.engagement || 0} color="pro" />
+                <ScoreBar
+                  label="Coherence"
+                  score={analysis.pro.coherence || 0}
+                  color="pro"
+                />
+                <ScoreBar
+                  label="Evidence"
+                  score={analysis.pro.evidence || 0}
+                  color="pro"
+                />
+                <ScoreBar
+                  label="Engagement"
+                  score={analysis.pro.engagement || 0}
+                  color="pro"
+                />
               </div>
             )}
           </div>
@@ -355,16 +578,34 @@ export default function DebateClient({ initialDebate, params }) {
           <div className="bg-arena-surface border border-arena-border rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <span className="text-xs font-semibold text-arena-con">CON</span>
-                <p className="font-medium">{debate.con_username || "Guest"}</p>
+                <span className="text-xs font-semibold text-arena-con">
+                  CON
+                </span>
+                <p className="font-medium">
+                  {debate.con_username || "Guest"}
+                </p>
               </div>
-              <span className="text-3xl font-bold text-arena-con">{conScore.toFixed(1)}</span>
+              <span className="text-3xl font-bold text-arena-con">
+                {conScore.toFixed(1)}
+              </span>
             </div>
             {analysis?.con && (
               <div className="space-y-2">
-                <ScoreBar label="Coherence" score={analysis.con.coherence || 0} color="con" />
-                <ScoreBar label="Evidence" score={analysis.con.evidence || 0} color="con" />
-                <ScoreBar label="Engagement" score={analysis.con.engagement || 0} color="con" />
+                <ScoreBar
+                  label="Coherence"
+                  score={analysis.con.coherence || 0}
+                  color="con"
+                />
+                <ScoreBar
+                  label="Evidence"
+                  score={analysis.con.evidence || 0}
+                  color="con"
+                />
+                <ScoreBar
+                  label="Engagement"
+                  score={analysis.con.engagement || 0}
+                  color="con"
+                />
               </div>
             )}
           </div>
@@ -374,7 +615,9 @@ export default function DebateClient({ initialDebate, params }) {
         {analysis?.summary && (
           <div className="bg-arena-surface border border-arena-border rounded-xl p-6 mb-8">
             <h3 className="font-semibold mb-2">AI Analysis</h3>
-            <p className="text-sm text-arena-muted leading-relaxed">{analysis.summary}</p>
+            <p className="text-sm text-arena-muted leading-relaxed">
+              {analysis.summary}
+            </p>
           </div>
         )}
 
@@ -403,9 +646,13 @@ export default function DebateClient({ initialDebate, params }) {
               </button>
             </div>
           ) : voted ? (
-            <p className="text-sm text-arena-muted text-center mb-4">Thanks for voting!</p>
+            <p className="text-sm text-arena-muted text-center mb-4">
+              Thanks for voting!
+            </p>
           ) : (
-            <p className="text-sm text-arena-muted text-center mb-4">Register to vote</p>
+            <p className="text-sm text-arena-muted text-center mb-4">
+              Register to vote
+            </p>
           )}
           {votes && (
             <VoteBar
