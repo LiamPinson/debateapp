@@ -61,6 +61,11 @@ export default async function DebatePage({ params }) {
   let debate;
   try {
     debate = await getDebateSSR(debateId);
+    if (!debate) {
+      // The redirect can arrive before the DB insert propagates — retry once
+      await new Promise((r) => setTimeout(r, 500));
+      debate = await getDebateSSR(debateId);
+    }
   } catch (err) {
     console.error("DEBATE PAGE: getDebateSSR threw", debateId, err?.message);
     throw err; // re-throw so Next.js shows a 500 instead of silently 404ing
