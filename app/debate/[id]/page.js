@@ -57,7 +57,16 @@ export async function generateMetadata({ params }) {
 
 export default async function DebatePage({ params }) {
   const { id: debateId } = params;
-  const debate = await getDebateSSR(debateId);
+
+  let debate;
+  try {
+    debate = await getDebateSSR(debateId);
+  } catch (err) {
+    console.error("DEBATE PAGE: getDebateSSR threw", debateId, err?.message);
+    throw err; // re-throw so Next.js shows a 500 instead of silently 404ing
+  }
+
+  console.log("DEBATE PAGE: debateId =", debateId, "found =", !!debate);
 
   if (!debate) {
     notFound();
