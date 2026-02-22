@@ -213,11 +213,38 @@ export default function DebateClient({ initialDebate, params }) {
     }
   }, [debate, debateId, mySide]);
 
-  // Forfeit handler
+  // In-progress poll: detect when the opponent forfeits or the debate completes
+  // unexpectedly (realtime unavailable for guests).
+  useEffect(() => {
+    if (debate?.status !== "in_progress") return;
+
+    let active = true;
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const data = await getDebateDetail(debateId);
+        const updated = data?.debate || data;
+        if (updated?.status && updated.status !== "in_progress") {
+          setDebate((d) => ({ ...d, ...updated }));
+          return; // stop polling
+        }
+      } catch { /* ignore transient errors */ }
+      if (active) setTimeout(poll, 3000);
+    };
+
+    const timeout = setTimeout(poll, 3000);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [debate?.status, debateId]);
+
+  // Forfeit handler — navigate home after forfeiting; opponent detects via polling
   const handleForfeit = async () => {
     if (!mySide) return;
     await forfeitDebate(debateId, mySide);
     setForfeitConfirm(false);
+    router.push("/");
   };
 
   // Vote handler
