@@ -16,20 +16,27 @@ export async function GET(request) {
 
     const db = createServiceClient();
 
+    // Fetch debate + topic separately from users to avoid ambiguous FK join
+    // (two FKs to users: pro_user_id + con_user_id confuses PostgREST).
     const { data: debate, error } = await db
       .from("debates")
-      .select(`
-        *,
-        topics(title, short_title, category, description),
-        pro_user:users!pro_user_id(username, rank_tier),
-        con_user:users!con_user_id(username, rank_tier)
-      `)
+      .select("*, topics(title, short_title, category, description)")
       .eq("id", debateId)
       .single();
 
     if (error || !debate) {
       return NextResponse.json({ error: "Debate not found" }, { status: 404 });
     }
+
+    // Fetch user display names separately
+    const [proUser, conUser] = await Promise.all([
+      debate.pro_user_id
+        ? db.from("users").select("username, rank_tier").eq("id", debate.pro_user_id).maybeSingle().then((r) => r.data)
+        : null,
+      debate.con_user_id
+        ? db.from("users").select("username, rank_tier").eq("id", debate.con_user_id).maybeSingle().then((r) => r.data)
+        : null,
+    ]);
 
     // Get vote tally
     const { data: votes } = await db
@@ -48,13 +55,13 @@ export async function GET(request) {
     return NextResponse.json({
       debate: {
         ...debate,
-        // Flatten nested user joins
+        // Flatten topic and user data
         topic_title: debate.topics?.title || null,
         topic_description: debate.topics?.description || null,
-        pro_username: debate.pro_user?.username || null,
-        pro_rank_tier: debate.pro_user?.rank_tier || null,
-        con_username: debate.con_user?.username || null,
-        con_rank_tier: debate.con_user?.rank_tier || null,
+        pro_username: proUser?.username || null,
+        pro_rank_tier: proUser?.rank_tier || null,
+        con_username: conUser?.username || null,
+        con_rank_tier: conUser?.rank_tier || null,
         // Strip raw transcript segments from public response (large payload)
         transcript: debate.transcript
           ? { full_text: debate.transcript.full_text, duration: debate.transcript.duration }

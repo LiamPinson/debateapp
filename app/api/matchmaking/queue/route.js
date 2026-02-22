@@ -3,6 +3,37 @@ import { enterQueue, leaveQueue } from "@/lib/matchmaking";
 import { createServiceClient } from "@/lib/supabase";
 
 /**
+ * GET /api/matchmaking/queue?queueId=xxx
+ * Poll the status of a queue entry. Used as a fallback when Supabase
+ * realtime is unavailable (e.g. due to RLS restrictions for guest users).
+ */
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const queueId = searchParams.get("queueId");
+
+    if (!queueId) {
+      return NextResponse.json({ error: "queueId required" }, { status: 400 });
+    }
+
+    const db = createServiceClient();
+    const { data, error } = await db
+      .from("matchmaking_queue")
+      .select("status, debate_id, matched_with")
+      .eq("id", queueId)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data || { status: "not_found" });
+  } catch (err) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
  * POST /api/matchmaking/queue
  * Enter the matchmaking queue.
  *

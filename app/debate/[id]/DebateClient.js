@@ -141,14 +141,54 @@ export default function DebateClient({ initialDebate, params }) {
     };
   }, [debateId, mySide, debate?.status]);
 
-  // When both sides are ready, the first to detect it starts the debate
+  // When both sides are ready, the first to detect it starts the debate.
+  // Optimistically update local state on success — don't wait for realtime
+  // (realtime is blocked by RLS for guest users).
   useEffect(() => {
     if (myReady && opponentReady && debate?.status === "prematch") {
-      startDebate(debateId);
+      startDebate(debateId).then((result) => {
+        if (!result.error) {
+          setDebate((d) => ({
+            ...d,
+            status: "in_progress",
+            phase: "opening_pro",
+            started_at: new Date().toISOString(),
+          }));
+        }
+      });
     }
   }, [myReady, opponentReady, debate?.status, debateId]);
 
-  // Phase advance handler
+  // Prematch poll: detect when the debate transitions to in_progress via the API.
+  // This is a fallback for when the Supabase broadcast "ready" signal is missed
+  // (e.g. timing differences, page refresh, or realtime unavailable for guests).
+  useEffect(() => {
+    if (debate?.status !== "prematch") return;
+
+    let active = true;
+    const poll = async () => {
+      if (!active) return;
+      try {
+        const data = await getDebateDetail(debateId);
+        const updated = data?.debate || data;
+        if (updated?.status === "in_progress") {
+          setDebate((d) => ({ ...d, ...updated }));
+          return; // stop polling
+        }
+      } catch { /* ignore transient errors */ }
+      if (active) setTimeout(poll, 2000);
+    };
+
+    const timeout = setTimeout(poll, 2000);
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [debate?.status, debateId]);
+
+  // Phase advance handler — optimistically update local state on success.
+  // Both clients will call this; the atomic CAS on the server means only one
+  // wins, but both can safely update their local state to the next phase.
   const handleTimeUp = useCallback(async () => {
     if (!debate || !mySide) return;
     const currentIdx = PHASE_ORDER.indexOf(debate.phase);
@@ -156,9 +196,20 @@ export default function DebateClient({ initialDebate, params }) {
     if (!nextPhase) return;
 
     if (nextPhase === "ended") {
-      await completeDebate(debateId);
+      const result = await completeDebate(debateId);
+      if (!result.error) {
+        setDebate((d) => ({
+          ...d,
+          status: "completed",
+          phase: "ended",
+          completed_at: new Date().toISOString(),
+        }));
+      }
     } else {
-      await advancePhase(debateId, nextPhase);
+      const result = await advancePhase(debateId, nextPhase);
+      if (!result.error) {
+        setDebate((d) => ({ ...d, phase: nextPhase }));
+      }
     }
   }, [debate, debateId, mySide]);
 
