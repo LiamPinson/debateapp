@@ -39,6 +39,88 @@ export async function POST(request) {
     const db = createServiceClient();
 
     switch (action) {
+      // ---- MARK READY (prematch) ----
+      // Records one side as ready. When both sides are ready the server
+      // atomically starts the debate and returns the real started_at timestamp
+      // so both clients can sync their timers to the same origin.
+      case "ready": {
+        if (!side || !["pro", "con"].includes(side)) {
+          return NextResponse.json(
+            { error: "side required (pro or con)" },
+            { status: 400 }
+          );
+        }
+
+        const readyField = side === "pro" ? "pro_ready" : "con_ready";
+
+        // Mark this side ready; guard on prematch so we ignore late calls.
+        const { data: readyResult, error: readyErr } = await db
+          .from("debates")
+          .update({ [readyField]: true })
+          .eq("id", debateId)
+          .eq("status", "prematch")
+          .select("pro_ready, con_ready")
+          .maybeSingle();
+
+        if (readyErr) {
+          return NextResponse.json({ error: readyErr.message }, { status: 500 });
+        }
+
+        // Debate was already started (prematch guard matched 0 rows) — return current state.
+        if (!readyResult) {
+          const { data: current } = await db
+            .from("debates")
+            .select("status, phase, started_at, pro_ready, con_ready")
+            .eq("id", debateId)
+            .single();
+          return NextResponse.json({
+            success: true,
+            alreadyStarted: true,
+            ...current,
+          });
+        }
+
+        // Both sides ready → start the debate atomically.
+        if (readyResult.pro_ready && readyResult.con_ready) {
+          const { data: started } = await db
+            .from("debates")
+            .update({
+              status: "in_progress",
+              phase: "opening_pro",
+              started_at: new Date().toISOString(),
+            })
+            .eq("id", debateId)
+            .eq("status", "prematch")
+            .select("status, phase, started_at, daily_room_name")
+            .maybeSingle();
+
+          // Start recording (fire-and-forget).
+          if (started?.daily_room_name) {
+            startRecording(started.daily_room_name).catch((err) =>
+              console.error("Recording start failed:", err)
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            bothReady: true,
+            status: started?.status || "in_progress",
+            phase: started?.phase || "opening_pro",
+            started_at: started?.started_at || new Date().toISOString(),
+            pro_ready: true,
+            con_ready: true,
+          });
+        }
+
+        // Only one side ready so far — return updated flags.
+        return NextResponse.json({
+          success: true,
+          bothReady: false,
+          pro_ready: readyResult.pro_ready,
+          con_ready: readyResult.con_ready,
+        });
+      }
+
       // ---- START DEBATE ----
       case "start": {
         // Atomic: only transition prematch → in_progress

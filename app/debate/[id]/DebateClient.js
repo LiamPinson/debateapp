@@ -9,7 +9,7 @@ import {
   getDebateDetail,
   getDailyToken,
   requestSideSwap,
-  startDebate,
+  setReady,
   advancePhase,
   completeDebate,
   forfeitDebate,
@@ -141,27 +141,9 @@ export default function DebateClient({ initialDebate, params }) {
     };
   }, [debateId, mySide, debate?.status]);
 
-  // When both sides are ready, the first to detect it starts the debate.
-  // Optimistically update local state on success — don't wait for realtime
-  // (realtime is blocked by RLS for guest users).
-  useEffect(() => {
-    if (myReady && opponentReady && debate?.status === "prematch") {
-      startDebate(debateId).then((result) => {
-        if (!result.error) {
-          setDebate((d) => ({
-            ...d,
-            status: "in_progress",
-            phase: "opening_pro",
-            started_at: new Date().toISOString(),
-          }));
-        }
-      });
-    }
-  }, [myReady, opponentReady, debate?.status, debateId]);
-
-  // Prematch poll: detect when the debate transitions to in_progress via the API.
-  // This is a fallback for when the Supabase broadcast "ready" signal is missed
-  // (e.g. timing differences, page refresh, or realtime unavailable for guests).
+  // Prematch poll: sync opponent ready state + detect in_progress transition.
+  // Runs every 2 s while status is "prematch". Broadcast is best-effort only;
+  // this poll is the authoritative source of truth for both flags.
   useEffect(() => {
     if (debate?.status !== "prematch") return;
 
@@ -171,10 +153,18 @@ export default function DebateClient({ initialDebate, params }) {
       try {
         const data = await getDebateDetail(debateId);
         const updated = data?.debate || data;
-        if (updated?.status === "in_progress") {
+        if (!updated) {
+          if (active) setTimeout(poll, 2000);
+          return;
+        }
+        if (updated.status === "in_progress") {
           setDebate((d) => ({ ...d, ...updated }));
           return; // stop polling
         }
+        // Sync the opponent's ready flag from DB so the UI indicator updates
+        // even if the broadcast was missed.
+        if (mySide === "pro" && updated.con_ready) setOpponentReady(true);
+        if (mySide === "con" && updated.pro_ready) setOpponentReady(true);
       } catch { /* ignore transient errors */ }
       if (active) setTimeout(poll, 2000);
     };
@@ -184,7 +174,7 @@ export default function DebateClient({ initialDebate, params }) {
       active = false;
       clearTimeout(timeout);
     };
-  }, [debate?.status, debateId]);
+  }, [debate?.status, debateId, mySide]);
 
   // Phase advance handler — optimistically update local state on success.
   // Both clients will call this; the atomic CAS on the server means only one
@@ -259,12 +249,15 @@ export default function DebateClient({ initialDebate, params }) {
     getVoteTally(debateId).then((data) => setVotes(data));
   };
 
-  // Ready handler — broadcasts readiness (for UI indicator) AND immediately
-  // starts the debate. Don't wait for the opponent's broadcast, which is
-  // unreliable. The opponent detects the in_progress transition via the
-  // prematch polling loop (every 2s).
-  const handleReady = () => {
+  // Ready handler — records this side's readiness in DB and broadcasts
+  // for instant UI feedback. The server starts the debate when BOTH sides
+  // are marked ready, returning the authoritative started_at timestamp so
+  // both clients share the same clock origin.
+  const handleReady = async () => {
+    if (!mySide) return;
     setMyReady(true);
+
+    // Optimistic broadcast so opponent's "✓ Ready" indicator appears quickly.
     if (readyChannelRef.current) {
       readyChannelRef.current.send({
         type: "broadcast",
@@ -272,17 +265,19 @@ export default function DebateClient({ initialDebate, params }) {
         payload: { side: mySide },
       });
     }
-    // Start immediately — server CAS ensures only one client wins.
-    startDebate(debateId).then((result) => {
-      if (!result.error) {
-        setDebate((d) => ({
-          ...d,
-          status: "in_progress",
-          phase: "opening_pro",
-          started_at: new Date().toISOString(),
-        }));
-      }
-    });
+
+    const result = await setReady(debateId, mySide);
+    if (result.error) return;
+
+    if (result.bothReady || result.alreadyStarted) {
+      // Debate just started (or was already started by opponent).
+      // Fetch fresh state so we get the real started_at from DB.
+      const data = await getDebateDetail(debateId);
+      const updated = data?.debate || data;
+      if (updated) setDebate((d) => ({ ...d, ...updated }));
+    }
+    // If only one side ready, the prematch poll will detect when the
+    // opponent readies and the debate transitions to in_progress.
   };
 
   // Side swap
