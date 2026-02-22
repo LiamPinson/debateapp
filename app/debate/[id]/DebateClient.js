@@ -226,7 +226,8 @@ export default function DebateClient({ initialDebate, params }) {
       if (active) setTimeout(poll, 2000);
     };
 
-    const timeout = setTimeout(poll, 2000);
+    // Poll every 1 s so forfeit notification is near-instant
+    const timeout = setTimeout(poll, 1000);
     return () => {
       active = false;
       clearTimeout(timeout);
@@ -585,7 +586,61 @@ export default function DebateClient({ initialDebate, params }) {
     );
   }
 
-  // ─── RESULTS ─────────────────────────────────────────
+  // ─── FORFEIT RESULTS ─────────────────────────────────
+  if (debate.status === "forfeited" && debate.winner_source === "forfeit") {
+    const iWon = debate.winner === mySide;
+    const winnerName =
+      debate.winner === "pro"
+        ? debate.pro_username || "Pro"
+        : debate.con_username || "Con";
+
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        <div className="text-center mb-2">
+          <p className="text-sm text-arena-muted">{debate.topic_title || "Quick Match"}</p>
+        </div>
+
+        {/* Outcome banner */}
+        <div
+          className={`text-center py-8 rounded-xl mb-6 ${
+            iWon
+              ? "bg-arena-pro/10 border border-arena-pro/30"
+              : "bg-arena-con/10 border border-arena-con/30"
+          }`}
+        >
+          <p className="text-4xl mb-3">{iWon ? "🏆" : "🚩"}</p>
+          <p className={`text-2xl font-bold mb-1 ${iWon ? "text-arena-pro" : "text-arena-con"}`}>
+            {iWon ? "You Win!" : "You Lost"}
+          </p>
+          <p className="text-sm text-arena-muted">
+            {iWon
+              ? "Your opponent forfeited the debate."
+              : `${winnerName} wins by forfeit.`}
+          </p>
+        </div>
+
+        {/* Transcript notice */}
+        <div className="bg-arena-surface border border-arena-border rounded-xl p-6 mb-6 text-center">
+          <p className="font-semibold mb-1">Transcript &amp; AI Analysis</p>
+          <p className="text-sm text-arena-muted">
+            The debate recording and full AI analysis will be available on this
+            page within 24 hours.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-center">
+          <button
+            onClick={() => router.push("/")}
+            className="px-8 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── COMPLETED RESULTS ───────────────────────────────
   if (debate.status === "completed" || debate.status === "forfeited") {
     const proScore = parseFloat(debate.pro_quality_score) || 0;
     const conScore = parseFloat(debate.con_quality_score) || 0;
@@ -621,11 +676,7 @@ export default function DebateClient({ initialDebate, params }) {
                   } Wins!`}
             </p>
             <p className="text-xs text-arena-muted">
-              {debate.winner_source === "forfeit"
-                ? "by forfeit"
-                : debate.winner_source === "ai"
-                ? "AI decision"
-                : "community vote"}
+              {debate.winner_source === "ai" ? "AI decision" : "community vote"}
             </p>
           </div>
         )}
@@ -768,11 +819,29 @@ export default function DebateClient({ initialDebate, params }) {
     );
   }
 
-  // Fallback for processing/cancelled states
+  // ─── TRANSITIONAL / PROCESSING ───────────────────────
+  // Shown while status is "forfeiting", "processing", or "pipeline_failed".
+  // The in-progress poll continues running and will update debate state
+  // once the pipeline resolves to a terminal status.
+  const processingMessage =
+    debate.status === "forfeiting"
+      ? "Opponent forfeited — wrapping up..."
+      : debate.status === "pipeline_failed"
+      ? "Something went wrong processing results."
+      : "Processing results...";
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
       <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
-      <p className="text-arena-muted">Processing results...</p>
+      <p className="text-arena-muted">{processingMessage}</p>
+      {debate.status === "pipeline_failed" && (
+        <button
+          onClick={() => router.push("/")}
+          className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors mt-2"
+        >
+          Back to Home
+        </button>
+      )}
     </div>
   );
 }
