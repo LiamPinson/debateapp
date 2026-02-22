@@ -26,15 +26,39 @@ export function getPhaseDuration(phase, timeLimit) {
   return 0;
 }
 
-export default function PhaseTimer({ phase, timeLimit, onTimeUp }) {
+// Seconds elapsed from debate start until the beginning of this phase.
+// Used to sync the timer on page reload.
+const PHASE_ORDER_LIVE = ["opening_pro", "opening_con", "freeflow", "closing_con", "closing_pro"];
+
+function getPhaseStartOffset(phase, timeLimit) {
+  let offset = 0;
+  for (const p of PHASE_ORDER_LIVE) {
+    if (p === phase) break;
+    offset += getPhaseDuration(p, timeLimit);
+  }
+  return offset;
+}
+
+function calcInitialRemaining(phase, timeLimit, debateStartedAt) {
+  if (!debateStartedAt) return getPhaseDuration(phase, timeLimit);
   const duration = getPhaseDuration(phase, timeLimit);
-  const [remaining, setRemaining] = useState(duration);
+  const phaseOffset = getPhaseStartOffset(phase, timeLimit); // seconds before this phase
+  const phaseStartMs = new Date(debateStartedAt).getTime() + phaseOffset * 1000;
+  const elapsedSec = Math.floor((Date.now() - phaseStartMs) / 1000);
+  return Math.max(0, duration - elapsedSec);
+}
+
+export default function PhaseTimer({ phase, timeLimit, onTimeUp, debateStartedAt }) {
+  const duration = getPhaseDuration(phase, timeLimit);
+  const [remaining, setRemaining] = useState(() =>
+    calcInitialRemaining(phase, timeLimit, debateStartedAt)
+  );
   const callbackRef = useRef(onTimeUp);
   callbackRef.current = onTimeUp;
 
   useEffect(() => {
-    setRemaining(duration);
-  }, [phase, duration]);
+    setRemaining(calcInitialRemaining(phase, timeLimit, debateStartedAt));
+  }, [phase, duration, debateStartedAt]);
 
   useEffect(() => {
     if (remaining <= 0 || phase === "ended" || phase === "prematch") return;

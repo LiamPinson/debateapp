@@ -489,6 +489,7 @@ export default function DebateClient({ initialDebate, params }) {
             phase={debate.phase}
             timeLimit={debate.time_limit}
             onTimeUp={handleTimeUp}
+            debateStartedAt={debate.started_at}
           />
         </div>
 
