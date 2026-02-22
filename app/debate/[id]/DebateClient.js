@@ -228,7 +228,10 @@ export default function DebateClient({ initialDebate, params }) {
     getVoteTally(debateId).then((data) => setVotes(data));
   };
 
-  // Ready handler — broadcasts readiness and triggers start when both ready
+  // Ready handler — broadcasts readiness (for UI indicator) AND immediately
+  // starts the debate. Don't wait for the opponent's broadcast, which is
+  // unreliable. The opponent detects the in_progress transition via the
+  // prematch polling loop (every 2s).
   const handleReady = () => {
     setMyReady(true);
     if (readyChannelRef.current) {
@@ -238,6 +241,17 @@ export default function DebateClient({ initialDebate, params }) {
         payload: { side: mySide },
       });
     }
+    // Start immediately — server CAS ensures only one client wins.
+    startDebate(debateId).then((result) => {
+      if (!result.error) {
+        setDebate((d) => ({
+          ...d,
+          status: "in_progress",
+          phase: "opening_pro",
+          started_at: new Date().toISOString(),
+        }));
+      }
+    });
   };
 
   // Side swap
