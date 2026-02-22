@@ -213,10 +213,13 @@ export default function DebateClient({ initialDebate, params }) {
     }
   }, [debate, debateId, mySide]);
 
-  // In-progress poll: detect when the opponent forfeits or the debate completes
-  // unexpectedly (realtime unavailable for guests).
+  // Poll while in_progress OR in the transitional "forfeiting" state.
+  // Keeps polling until we reach a terminal status (completed/forfeited/cancelled).
+  // Realtime is unavailable for guests so this is the only way to detect
+  // an opponent forfeit or pipeline completion.
   useEffect(() => {
-    if (debate?.status !== "in_progress") return;
+    const active_status = debate?.status === "in_progress" || debate?.status === "forfeiting";
+    if (!active_status) return;
 
     let active = true;
     const poll = async () => {
@@ -224,15 +227,16 @@ export default function DebateClient({ initialDebate, params }) {
       try {
         const data = await getDebateDetail(debateId);
         const updated = data?.debate || data;
-        if (updated?.status && updated.status !== "in_progress") {
+        const s = updated?.status;
+        if (s && s !== "in_progress" && s !== "forfeiting") {
           setDebate((d) => ({ ...d, ...updated }));
-          return; // stop polling
+          return; // terminal state reached — stop
         }
       } catch { /* ignore transient errors */ }
-      if (active) setTimeout(poll, 3000);
+      if (active) setTimeout(poll, 2000);
     };
 
-    const timeout = setTimeout(poll, 3000);
+    const timeout = setTimeout(poll, 2000);
     return () => {
       active = false;
       clearTimeout(timeout);
