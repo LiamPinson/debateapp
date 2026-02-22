@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/debates/detail?debateId=<uuid>
  * Get full debate details including topic, scores, transcript status, and pipeline state.
@@ -52,23 +54,26 @@ export async function GET(request) {
       }
     }
 
-    return NextResponse.json({
-      debate: {
-        ...debate,
-        // Flatten topic and user data
-        topic_title: debate.topics?.title || null,
-        topic_description: debate.topics?.description || null,
-        pro_username: proUser?.username || null,
-        pro_rank_tier: proUser?.rank_tier || null,
-        con_username: conUser?.username || null,
-        con_rank_tier: conUser?.rank_tier || null,
-        // Strip raw transcript segments from public response (large payload)
-        transcript: debate.transcript
-          ? { full_text: debate.transcript.full_text, duration: debate.transcript.duration }
-          : null,
+    return NextResponse.json(
+      {
+        debate: {
+          ...debate,
+          // Flatten topic and user data
+          topic_title: debate.topics?.title || null,
+          topic_description: debate.topics?.description || null,
+          pro_username: proUser?.username || null,
+          pro_rank_tier: proUser?.rank_tier || null,
+          con_username: conUser?.username || null,
+          con_rank_tier: conUser?.rank_tier || null,
+          // Strip raw transcript segments from public response (large payload)
+          transcript: debate.transcript
+            ? { full_text: debate.transcript.full_text, duration: debate.transcript.duration }
+            : null,
+        },
+        voteTally,
       },
-      voteTally,
-    });
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

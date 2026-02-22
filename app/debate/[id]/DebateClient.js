@@ -223,7 +223,7 @@ export default function DebateClient({ initialDebate, params }) {
           return; // terminal state reached — stop
         }
       } catch { /* ignore transient errors */ }
-      if (active) setTimeout(poll, 2000);
+      if (active) setTimeout(poll, 1000);
     };
 
     // Poll every 1 s so forfeit notification is near-instant
@@ -832,16 +832,16 @@ export default function DebateClient({ initialDebate, params }) {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-      <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
-      <p className="text-arena-muted">{processingMessage}</p>
-      {debate.status === "pipeline_failed" && (
-        <button
-          onClick={() => router.push("/")}
-          className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors mt-2"
-        >
-          Back to Home
-        </button>
+      {debate.status !== "pipeline_failed" && (
+        <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
       )}
+      <p className="text-arena-muted">{processingMessage}</p>
+      <button
+        onClick={() => router.push("/")}
+        className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors mt-2"
+      >
+        Back to Home
+      </button>
     </div>
   );
 }
