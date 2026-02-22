@@ -267,15 +267,25 @@ export default function DebateClient({ initialDebate, params }) {
       });
     }
 
-    const result = await setReady(debateId, mySide);
-    if (result.error) return;
+    try {
+      const result = await setReady(debateId, mySide);
+      if (result?.error) return;
 
-    if (result.bothReady || result.alreadyStarted) {
-      // Debate just started (or was already started by opponent).
-      // Fetch fresh state so we get the real started_at from DB.
-      const data = await getDebateDetail(debateId);
-      const updated = data?.debate || data;
-      if (updated) setDebate((d) => ({ ...d, ...updated }));
+      if (result?.bothReady || result?.alreadyStarted) {
+        // Debate just started (or was already started by opponent).
+        // Fetch fresh state so we get the real started_at from DB.
+        try {
+          const data = await getDebateDetail(debateId);
+          const updated = data?.debate || data;
+          if (updated?.status === "in_progress") {
+            setDebate((d) => ({ ...d, ...updated }));
+          }
+        } catch {
+          // getDebateDetail failed — prematch poll will pick up in_progress within 2s
+        }
+      }
+    } catch {
+      // setReady network error — prematch poll will still detect the transition
     }
     // If only one side ready, the prematch poll will detect when the
     // opponent readies and the debate transitions to in_progress.
