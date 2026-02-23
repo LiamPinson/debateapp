@@ -30,6 +30,45 @@ export async function GET(request) {
       return NextResponse.json({ error: "Debate not found" }, { status: 404 });
     }
 
+    // ── Server-side prematch timeout safety net ──
+    // If the debate has been in prematch for more than 90 seconds,
+    // auto-cancel it. This catches cases where both players closed
+    // their tab and no client-side timeout fired.
+    if (debate.status === "prematch" && debate.created_at) {
+      const ageMs = Date.now() - new Date(debate.created_at).getTime();
+      const PREMATCH_TIMEOUT_MS = 90_000; // 90s (client timeout is 60s)
+
+      if (ageMs > PREMATCH_TIMEOUT_MS) {
+        const { data: autoCancelled } = await db
+          .from("debates")
+          .update({
+            status: "cancelled",
+            phase: "ended",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", debateId)
+          .eq("status", "prematch")
+          .select("id")
+          .maybeSingle();
+
+        if (autoCancelled) {
+          await db
+            .from("matchmaking_queue")
+            .update({ status: "expired", debate_id: null, matched_with: null })
+            .eq("debate_id", debateId)
+            .eq("status", "matched");
+
+          // Re-fetch to return the cancelled state
+          const { data: refreshed } = await db
+            .from("debates")
+            .select("*, topics(title, short_title, category, description)")
+            .eq("id", debateId)
+            .single();
+          if (refreshed) Object.assign(debate, refreshed);
+        }
+      }
+    }
+
     // Fetch user display names separately
     const [proUser, conUser] = await Promise.all([
       debate.pro_user_id

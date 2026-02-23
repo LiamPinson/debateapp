@@ -14,6 +14,7 @@ import {
   advancePhase,
   completeDebate,
   forfeitDebate,
+  cancelDebate,
   castVote,
   getVoteTally,
 } from "@/lib/api-client";
@@ -49,6 +50,10 @@ export default function DebateClient({ initialDebate, params }) {
   const [myReady, setMyReady] = useState(false);
   const [opponentReady, setOpponentReady] = useState(false);
   const readyChannelRef = useRef(null);
+
+  // ── Prematch countdown ──
+  const [prematchSecondsLeft, setPrematchSecondsLeft] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   // Determine which side the current user is on
   const mySide =
@@ -190,6 +195,39 @@ export default function DebateClient({ initialDebate, params }) {
     return () => { active = false; };
   }, [debate?.status, debateId, mySide]);
 
+  // ── Prematch countdown timer (60 seconds from debate.created_at) ──
+  useEffect(() => {
+    if (debate?.status !== "prematch" || !debate?.created_at) return;
+
+    const PREMATCH_TIMEOUT_S = 60;
+    let active = true;
+
+    const tick = () => {
+      if (!active) return;
+      const elapsedMs = Date.now() - new Date(debate.created_at).getTime();
+      const remaining = Math.max(0, PREMATCH_TIMEOUT_S - Math.floor(elapsedMs / 1000));
+      setPrematchSecondsLeft(remaining);
+
+      if (remaining <= 0) {
+        cancelDebate(debateId)
+          .then((result) => {
+            if (result?.cancelled || result?.alreadyCancelled) {
+              setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
+            }
+          })
+          .catch(() => {
+            // Server-side safety net at 90s will catch this
+          });
+        return;
+      }
+
+      if (active) setTimeout(tick, 1000);
+    };
+
+    tick();
+    return () => { active = false; };
+  }, [debate?.status, debate?.created_at, debateId]);
+
   // Phase advance handler — optimistically update local state on success.
   // Both clients will call this; the atomic CAS on the server means only one
   // wins, but both can safely update their local state to the next phase.
@@ -318,6 +356,26 @@ export default function DebateClient({ initialDebate, params }) {
     await requestSideSwap(debateId, mySide);
   };
 
+  // Cancel/leave prematch
+  const handleCancelPrematch = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      const result = await cancelDebate(debateId);
+      if (result?.cancelled || result?.alreadyCancelled) {
+        setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
+      } else if (result?.alreadyStarted) {
+        const data = await getDebateDetail(debateId);
+        const updated = data?.debate || data;
+        if (updated) setDebate((d) => ({ ...d, ...updated }));
+      }
+    } catch (err) {
+      console.error("Cancel prematch error:", err);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -418,40 +476,81 @@ export default function DebateClient({ initialDebate, params }) {
             </p>
           )}
 
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center justify-center gap-4">
+              {!myReady && (
+                <>
+                  <button
+                    onClick={handleSwap}
+                    className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+                  >
+                    Swap Sides
+                  </button>
+                  <button
+                    onClick={handleReady}
+                    disabled={!mySide}
+                    className="px-8 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors disabled:opacity-50"
+                  >
+                    Ready
+                  </button>
+                </>
+              )}
+              {myReady && !opponentReady && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-3 border-arena-accent border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-arena-muted">
+                    Waiting for opponent to ready up...
+                  </p>
+                </div>
+              )}
+              {myReady && opponentReady && (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-3 border-green-400 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-green-400 font-medium">
+                    Starting debate...
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Prematch countdown */}
+            {prematchSecondsLeft !== null && (
+              <p className={`text-sm ${prematchSecondsLeft <= 10 ? "text-arena-con font-medium" : "text-arena-muted"}`}>
+                Match expires in {prematchSecondsLeft}s
+              </p>
+            )}
+
+            {/* Leave Match button */}
+            <button
+              onClick={handleCancelPrematch}
+              disabled={cancelling}
+              className="px-6 py-2 border border-arena-con/50 text-arena-con rounded-lg text-sm hover:bg-arena-con/10 transition-colors disabled:opacity-50"
+            >
+              {cancelling ? "Leaving..." : "Leave Match"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── CANCELLED ──────────────────────────────────────
+  if (debate.status === "cancelled") {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        <div className="bg-arena-surface border border-arena-border rounded-xl p-8 text-center">
+          <p className="text-4xl mb-4">--</p>
+          <h2 className="text-2xl font-bold mb-2">Match Cancelled</h2>
+          <p className="text-sm text-arena-muted mb-6">
+            The match was cancelled because both players did not ready up in time.
+          </p>
           <div className="flex items-center justify-center gap-4">
-            {!myReady && (
-              <>
-                <button
-                  onClick={handleSwap}
-                  className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-                >
-                  Swap Sides
-                </button>
-                <button
-                  onClick={handleReady}
-                  disabled={!mySide}
-                  className="px-8 py-2.5 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors disabled:opacity-50"
-                >
-                  Ready
-                </button>
-              </>
-            )}
-            {myReady && !opponentReady && (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-3 border-arena-accent border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-arena-muted">
-                  Waiting for opponent to ready up...
-                </p>
-              </div>
-            )}
-            {myReady && opponentReady && (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-8 h-8 border-3 border-green-400 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-green-400 font-medium">
-                  Starting debate...
-                </p>
-              </div>
-            )}
+            <button
+              onClick={() => router.push("/")}
+              className="px-6 py-2.5 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+            >
+              Back to Home
+            </button>
           </div>
         </div>
       </div>
