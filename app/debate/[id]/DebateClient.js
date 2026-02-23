@@ -60,14 +60,27 @@ export default function DebateClient({ initialDebate, params }) {
       ? "con"
       : null;
 
-  // Load debate detail — skipped if initialDebate was provided by the server
+  // Always fetch latest state on mount — SSR data may be stale (e.g. debate
+  // transitioned to in_progress between SSR and client hydration).
   useEffect(() => {
-    if (initialDebate) return;
-    getDebateDetail(debateId).then((data) => {
-      setDebate(data.debate || data);
-      setLoading(false);
-    });
-  }, [debateId, initialDebate]);
+    getDebateDetail(debateId)
+      .then((data) => {
+        const fresh = data?.debate || data;
+        if (fresh) {
+          setDebate((prev) => ({ ...prev, ...fresh }));
+          // Sync ready flags from DB
+          if (fresh.pro_ready && fresh.con_ready) {
+            setMyReady(true);
+            setOpponentReady(true);
+          }
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Initial debate fetch failed:", err);
+        setLoading(false);
+      });
+  }, [debateId]);
 
   // Realtime debate updates
   const onDebateChange = useCallback((updated) => {
@@ -138,9 +151,9 @@ export default function DebateClient({ initialDebate, params }) {
     };
   }, [debateId, mySide, debate?.status]);
 
-  // Prematch poll: sync opponent ready state + detect in_progress transition.
-  // Runs every 2 s while status is "prematch". Broadcast is best-effort only;
-  // this poll is the authoritative source of truth for both flags.
+  // Prematch poll: sync opponent ready state + detect status transitions.
+  // Runs every 1 s while local status is "prematch". This is the authoritative
+  // source of truth — broadcast and realtime are best-effort only.
   useEffect(() => {
     if (debate?.status !== "prematch") return;
 
@@ -150,27 +163,31 @@ export default function DebateClient({ initialDebate, params }) {
       try {
         const data = await getDebateDetail(debateId);
         const updated = data?.debate || data;
-        if (!updated) {
-          if (active) setTimeout(poll, 2000);
+        if (!active || !updated) {
+          if (active) setTimeout(poll, 1000);
           return;
         }
-        if (updated.status === "in_progress") {
+
+        // Status changed from prematch → update full debate state and stop
+        if (updated.status !== "prematch") {
           setDebate((d) => ({ ...d, ...updated }));
-          return; // stop polling
+          return; // stop polling — another effect handles in_progress/etc
         }
-        // Sync the opponent's ready flag from DB so the UI indicator updates
-        // even if the broadcast was missed.
+
+        // Still prematch — sync the opponent's ready flag from DB
         if (mySide === "pro" && updated.con_ready) setOpponentReady(true);
         if (mySide === "con" && updated.pro_ready) setOpponentReady(true);
-      } catch { /* ignore transient errors */ }
-      if (active) setTimeout(poll, 2000);
+      } catch (err) {
+        console.error("Prematch poll error:", err);
+      }
+      if (active) setTimeout(poll, 1000);
     };
 
-    const timeout = setTimeout(poll, 2000);
-    return () => {
-      active = false;
-      clearTimeout(timeout);
-    };
+    // First poll fires immediately (not after a delay) to catch any
+    // state that changed between SSR and client hydration.
+    poll();
+
+    return () => { active = false; };
   }, [debate?.status, debateId, mySide]);
 
   // Phase advance handler — optimistically update local state on success.
@@ -266,26 +283,33 @@ export default function DebateClient({ initialDebate, params }) {
 
     try {
       const result = await setReady(debateId, mySide);
-      if (result?.error) return;
+      if (result?.error) {
+        console.error("setReady error:", result.error);
+        setMyReady(false); // revert optimistic update
+        return;
+      }
 
-      if (result?.bothReady || result?.alreadyStarted) {
-        // Debate just started (or was already started by opponent).
-        // Fetch fresh state so we get the real started_at from DB.
-        try {
-          const data = await getDebateDetail(debateId);
-          const updated = data?.debate || data;
-          if (updated?.status === "in_progress") {
+      // Always fetch fresh state after readying — the server may have
+      // started the debate even if our response doesn't explicitly say so
+      // (e.g. opponent readied milliseconds before us).
+      try {
+        const data = await getDebateDetail(debateId);
+        const updated = data?.debate || data;
+        if (updated) {
+          if (updated.status !== "prematch") {
             setDebate((d) => ({ ...d, ...updated }));
           }
-        } catch {
-          // getDebateDetail failed — prematch poll will pick up in_progress within 2s
+          // Sync opponent ready indicator
+          if (mySide === "pro" && updated.con_ready) setOpponentReady(true);
+          if (mySide === "con" && updated.pro_ready) setOpponentReady(true);
         }
+      } catch {
+        // getDebateDetail failed — the 1s poll will pick it up
       }
-    } catch {
-      // setReady network error — prematch poll will still detect the transition
+    } catch (err) {
+      console.error("setReady network error:", err);
+      setMyReady(false); // revert optimistic update
     }
-    // If only one side ready, the prematch poll will detect when the
-    // opponent readies and the debate transitions to in_progress.
   };
 
   // Side swap
