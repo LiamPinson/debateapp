@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { enterQueue, leaveQueue } from "@/lib/api-client";
@@ -18,9 +18,14 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
   const [error, setError] = useState(null);
 
   const isGuest = !user;
+  const matchedRef = useRef(false);
 
   const onMatch = useCallback(
     async (match) => {
+      // Guard: prevent double navigation if both realtime and polling fire
+      if (matchedRef.current) return;
+      matchedRef.current = true;
+
       setSearching(false);
       setQueueId(null);
       onClose();
@@ -70,6 +75,8 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
       }
       // If match was already found synchronously (second user into queue)
       if (result.match?.debate_id) {
+        if (matchedRef.current) return;
+        matchedRef.current = true;
         setSearching(false);
         onClose();
         await new Promise((r) => setTimeout(r, 1000));
@@ -88,6 +95,7 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
     if (queueId) {
       await leaveQueue(queueId);
     }
+    matchedRef.current = false;
     setSearching(false);
     setQueueId(null);
     setElapsed(0);

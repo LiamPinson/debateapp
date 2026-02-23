@@ -121,6 +121,50 @@ export async function POST(request) {
         });
       }
 
+      // ---- CANCEL (prematch timeout or manual leave) ----
+      case "cancel": {
+        // Atomic: only cancel if still in prematch.
+        const { data: cancelResult, error: cancelErr } = await db
+          .from("debates")
+          .update({
+            status: "cancelled",
+            phase: "ended",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", debateId)
+          .eq("status", "prematch") // CAS guard
+          .select("id")
+          .maybeSingle();
+
+        if (cancelErr) {
+          return NextResponse.json({ error: cancelErr.message }, { status: 500 });
+        }
+
+        if (!cancelResult) {
+          // Debate already started or was already cancelled — not an error.
+          const { data: current } = await db
+            .from("debates")
+            .select("status, phase")
+            .eq("id", debateId)
+            .single();
+          return NextResponse.json({
+            success: true,
+            alreadyCancelled: current?.status === "cancelled",
+            alreadyStarted: current?.status === "in_progress",
+            status: current?.status,
+          });
+        }
+
+        // Release both players' queue entries
+        await db
+          .from("matchmaking_queue")
+          .update({ status: "expired", debate_id: null, matched_with: null })
+          .eq("debate_id", debateId)
+          .eq("status", "matched");
+
+        return NextResponse.json({ success: true, cancelled: true });
+      }
+
       // ---- START DEBATE ----
       case "start": {
         // Atomic: only transition prematch → in_progress
