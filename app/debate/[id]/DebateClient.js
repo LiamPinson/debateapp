@@ -156,15 +156,61 @@ export default function DebateClient({ initialDebate, params }) {
     };
   }, [debateId, mySide, debate?.status]);
 
-  // Prematch poll: sync opponent ready state + detect status transitions.
-  // Runs every 1 s while local status is "prematch". This is the authoritative
-  // source of truth — broadcast and realtime are best-effort only.
+  // ── Unified prematch poll + countdown timer ──
+  // Single effect handles: (a) 1 s polling for ready-flag sync & status
+  // transitions, and (b) 60 s countdown that auto-cancels with retry.
+  // Merging the two prevents the old bug where the countdown fired
+  // cancelDebate() once, swallowed errors, and never retried.
   useEffect(() => {
-    if (debate?.status !== "prematch") return;
+    if (debate?.status !== "prematch" || !debate?.created_at) return;
 
+    const PREMATCH_TIMEOUT_S = 60;
     let active = true;
+    let cancelInFlight = false;
+
     const poll = async () => {
       if (!active) return;
+
+      // ── Countdown display ──
+      const elapsedMs = Date.now() - new Date(debate.created_at).getTime();
+      const remaining = Math.max(0, PREMATCH_TIMEOUT_S - Math.floor(elapsedMs / 1000));
+      setPrematchSecondsLeft(remaining);
+
+      // ── EXPIRED: cancel + verify loop (retries every 2 s) ──
+      if (remaining <= 0) {
+        if (!cancelInFlight) {
+          cancelInFlight = true;
+          try {
+            const result = await cancelDebate(debateId);
+            console.log("Auto-cancel result:", result);
+            if (result?.cancelled || result?.alreadyCancelled) {
+              setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
+              return; // done — cancelled UI will render
+            }
+          } catch (err) {
+            console.error("Auto-cancel network error:", err);
+          }
+          cancelInFlight = false;
+        }
+
+        // Verify server state even if cancel call failed / returned unexpected result
+        try {
+          const data = await getDebateDetail(debateId);
+          const updated = data?.debate || data;
+          if (updated && updated.status !== "prematch") {
+            setDebate((d) => ({ ...d, ...updated }));
+            return; // state resolved — stop polling
+          }
+        } catch (err) {
+          console.error("Verify poll error:", err);
+        }
+
+        // Still stuck in prematch — retry in 2 s
+        if (active) setTimeout(poll, 2000);
+        return;
+      }
+
+      // ── NORMAL: prematch poll (1 s) ──
       try {
         const data = await getDebateDetail(debateId);
         const updated = data?.debate || data;
@@ -173,10 +219,10 @@ export default function DebateClient({ initialDebate, params }) {
           return;
         }
 
-        // Status changed from prematch → update full debate state and stop
+        // Status changed from prematch → update & stop
         if (updated.status !== "prematch") {
           setDebate((d) => ({ ...d, ...updated }));
-          return; // stop polling — another effect handles in_progress/etc
+          return;
         }
 
         // Still prematch — sync the opponent's ready flag from DB
@@ -185,48 +231,16 @@ export default function DebateClient({ initialDebate, params }) {
       } catch (err) {
         console.error("Prematch poll error:", err);
       }
+
       if (active) setTimeout(poll, 1000);
     };
 
-    // First poll fires immediately (not after a delay) to catch any
-    // state that changed between SSR and client hydration.
+    // First poll fires immediately to catch any state that changed
+    // between SSR and client hydration.
     poll();
 
     return () => { active = false; };
-  }, [debate?.status, debateId, mySide]);
-
-  // ── Prematch countdown timer (60 seconds from debate.created_at) ──
-  useEffect(() => {
-    if (debate?.status !== "prematch" || !debate?.created_at) return;
-
-    const PREMATCH_TIMEOUT_S = 60;
-    let active = true;
-
-    const tick = () => {
-      if (!active) return;
-      const elapsedMs = Date.now() - new Date(debate.created_at).getTime();
-      const remaining = Math.max(0, PREMATCH_TIMEOUT_S - Math.floor(elapsedMs / 1000));
-      setPrematchSecondsLeft(remaining);
-
-      if (remaining <= 0) {
-        cancelDebate(debateId)
-          .then((result) => {
-            if (result?.cancelled || result?.alreadyCancelled) {
-              setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
-            }
-          })
-          .catch(() => {
-            // Server-side safety net at 90s will catch this
-          });
-        return;
-      }
-
-      if (active) setTimeout(tick, 1000);
-    };
-
-    tick();
-    return () => { active = false; };
-  }, [debate?.status, debate?.created_at, debateId]);
+  }, [debate?.status, debate?.created_at, debateId, mySide]);
 
   // Phase advance handler — optimistically update local state on success.
   // Both clients will call this; the atomic CAS on the server means only one
