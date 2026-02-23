@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSession } from "@/lib/SessionContext";
-import { createBrowserClient } from "@/lib/supabase";
+import { createOAuthClient } from "@/lib/supabase";
 
 function GoogleIcon() {
   return (
@@ -30,7 +30,7 @@ export default function RegisterModal({ open, onClose }) {
 
   const handleGoogle = async () => {
     setError(null);
-    const supabase = createBrowserClient();
+    const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin + "/auth/callback" },

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@/lib/supabase";
+import { createOAuthClient } from "@/lib/supabase";
 import { loginWithOAuth } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
 
@@ -22,7 +22,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        const supabase = createBrowserClient();
+        const supabase = createOAuthClient();
         const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
         if (exchangeError || !data?.session) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
+import { createBrowserClient } from "@/lib/supabase";
 import { useRealtimeDebate } from "@/lib/useRealtime";
 import { useDaily } from "@/lib/useDaily";
 import {
@@ -110,34 +111,30 @@ export default function DebateClient({ initialDebate, params }) {
     }
   }, [debate?.status, debateId]);
 
-  // ── FIX 4: Mutual readiness via Supabase Realtime broadcast channel ──
+  // ── Mutual readiness via Supabase Realtime broadcast channel ──
+  // Uses the singleton browser client so there's only one WebSocket.
   useEffect(() => {
     if (!debateId || !mySide || debate?.status !== "prematch") return;
 
-    let channel;
-    import("@/lib/supabase").then(({ createBrowserClient }) => {
-      const supabase = createBrowserClient();
-      channel = supabase.channel(`ready:${debateId}`, {
-        config: { broadcast: { self: true } },
-      });
-
-      channel
-        .on("broadcast", { event: "ready" }, (payload) => {
-          const { side } = payload.payload;
-          if (side !== mySide) {
-            setOpponentReady(true);
-          }
-        })
-        .subscribe();
-
-      readyChannelRef.current = channel;
+    const supabase = createBrowserClient();
+    const channel = supabase.channel(`ready:${debateId}`, {
+      config: { broadcast: { self: true } },
     });
 
+    channel
+      .on("broadcast", { event: "ready" }, (payload) => {
+        const { side } = payload.payload;
+        if (side !== mySide) {
+          setOpponentReady(true);
+        }
+      })
+      .subscribe();
+
+    readyChannelRef.current = channel;
+
     return () => {
-      if (readyChannelRef.current) {
-        readyChannelRef.current.unsubscribe();
-        readyChannelRef.current = null;
-      }
+      supabase.removeChannel(channel);
+      readyChannelRef.current = null;
     };
   }, [debateId, mySide, debate?.status]);
 

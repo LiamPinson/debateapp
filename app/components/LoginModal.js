@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSession } from "@/lib/SessionContext";
 import { loginWithPassword } from "@/lib/api-client";
-import { createBrowserClient } from "@/lib/supabase";
+import { createOAuthClient } from "@/lib/supabase";
 
 const SESSION_KEY = "debate_session_token";
 
@@ -36,7 +36,7 @@ export default function LoginModal({ open, onClose }) {
 
   const handleGoogle = async () => {
     setError(null);
-    const supabase = createBrowserClient();
+    const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin + "/auth/callback" },
