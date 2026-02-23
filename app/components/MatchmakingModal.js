@@ -24,6 +24,8 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
     async (match) => {
       // Guard: prevent double navigation if both realtime and polling fire
       if (matchedRef.current) return;
+      // Guard: debate_id may not be set yet (CAS claim fires before debate creation)
+      if (!match?.debateId) return;
       matchedRef.current = true;
 
       setSearching(false);
