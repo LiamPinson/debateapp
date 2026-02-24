@@ -34,6 +34,19 @@ const PHASE_ORDER = [
   "ended",
 ];
 
+// Status priority for rejecting stale Realtime events that would regress state.
+// When a postgres_changes event arrives with an earlier status than the client
+// already has, the update is dropped to prevent infinite prematch↔in_progress loops.
+const STATUS_PRIORITY = {
+  prematch: 0,
+  in_progress: 1,
+  forfeiting: 2,
+  completed: 3,
+  forfeited: 3,
+  cancelled: 3,
+  pipeline_failed: 3,
+};
+
 export default function DebateClient({ initialDebate, params }) {
   const { id: debateId } = params;
   const router = useRouter();
@@ -87,16 +100,18 @@ export default function DebateClient({ initialDebate, params }) {
       });
   }, [debateId]);
 
-  // Realtime debate updates — guard against status regression.
-  // Supabase Realtime can deliver events out of order (e.g. the ready-flag
-  // UPDATE with status="prematch" arrives AFTER we locally set "in_progress").
-  const STATUS_RANK = { prematch: 0, in_progress: 1, forfeiting: 2, completed: 3, forfeited: 3, cancelled: 3 };
+  // Realtime debate updates — guard against stale events that would regress status.
+  // When both players ready up, the server does two sequential DB updates:
+  // (1) mark ready (status stays "prematch"), (2) start debate (status → "in_progress").
+  // Both fire postgres_changes events. If event (1) arrives after the client already
+  // has the "in_progress" state, blindly merging would reset to "prematch" and create
+  // an infinite loop (prematch poll restarts, auto-cancel fires, ready channel cycles).
   const onDebateChange = useCallback((updated) => {
     setDebate((prev) => {
-      const prevRank = STATUS_RANK[prev?.status] ?? -1;
-      const newRank = STATUS_RANK[updated?.status] ?? -1;
-      if (updated?.status && newRank < prevRank) {
-        // Stale event — keep current status but merge other fields
+      const prevPriority = STATUS_PRIORITY[prev?.status] ?? -1;
+      const newPriority = STATUS_PRIORITY[updated?.status] ?? -1;
+      if (updated?.status && newPriority < prevPriority) {
+        // Stale event — keep current status/phase but merge other fields (e.g. ready flags)
         const { status, phase, ...rest } = updated;
         return { ...prev, ...rest };
       }
@@ -197,6 +212,7 @@ export default function DebateClient({ initialDebate, params }) {
           cancelInFlight = true;
           try {
             const result = await cancelDebate(debateId);
+            if (!active) return; // effect cleaned up during await
             console.log("Auto-cancel result:", result);
             if (result?.cancelled || result?.alreadyCancelled) {
               setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
@@ -216,9 +232,12 @@ export default function DebateClient({ initialDebate, params }) {
           cancelInFlight = false;
         }
 
+        if (!active) return;
+
         // Verify server state even if cancel call failed / returned unexpected result
         try {
           const data = await getDebateDetail(debateId);
+          if (!active) return; // effect cleaned up during await
           const updated = data?.debate || data;
           if (updated && updated.status !== "prematch") {
             setDebate((d) => ({ ...d, ...updated }));
@@ -236,8 +255,9 @@ export default function DebateClient({ initialDebate, params }) {
       // ── NORMAL: prematch poll (1 s) ──
       try {
         const data = await getDebateDetail(debateId);
+        if (!active) return; // effect cleaned up during await
         const updated = data?.debate || data;
-        if (!active || !updated) {
+        if (!updated) {
           if (active) setTimeout(poll, 1000);
           return;
         }
@@ -296,6 +316,8 @@ export default function DebateClient({ initialDebate, params }) {
   // Keeps polling until we reach a terminal status (completed/forfeited/cancelled).
   // Realtime is unavailable for guests so this is the only way to detect
   // an opponent forfeit or pipeline completion.
+  // Also syncs fresh data every tick (defense-in-depth: corrects wrong phase
+  // if a stale Realtime event slipped through before the priority guard).
   useEffect(() => {
     const active_status = debate?.status === "in_progress" || debate?.status === "forfeiting";
     if (!active_status) return;
@@ -305,12 +327,17 @@ export default function DebateClient({ initialDebate, params }) {
       if (!active) return;
       try {
         const data = await getDebateDetail(debateId);
+        if (!active) return;
         const updated = data?.debate || data;
-        const s = updated?.status;
+        if (!updated) { if (active) setTimeout(poll, 1000); return; }
+
+        const s = updated.status;
         if (s && s !== "in_progress" && s !== "forfeiting") {
           setDebate((d) => ({ ...d, ...updated }));
           return; // terminal state reached — stop
         }
+        // Always sync fresh data (fixes wrong phase, started_at, etc.)
+        setDebate((d) => ({ ...d, ...updated }));
       } catch { /* ignore transient errors */ }
       if (active) setTimeout(poll, 1000);
     };
