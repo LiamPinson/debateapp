@@ -142,9 +142,10 @@ export async function POST(request) {
 
         if (!cancelResult) {
           // Debate already started or was already cancelled — not an error.
+          // Return full state so the client can transition correctly.
           const { data: current } = await db
             .from("debates")
-            .select("status, phase")
+            .select("status, phase, started_at")
             .eq("id", debateId)
             .single();
           return NextResponse.json({
@@ -152,6 +153,8 @@ export async function POST(request) {
             alreadyCancelled: current?.status === "cancelled",
             alreadyStarted: current?.status === "in_progress",
             status: current?.status,
+            phase: current?.phase,
+            started_at: current?.started_at,
           });
         }
 

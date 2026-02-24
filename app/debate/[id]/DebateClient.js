@@ -218,12 +218,14 @@ export default function DebateClient({ initialDebate, params }) {
               setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
               return; // done — cancelled UI will render
             }
-            // Debate already transitioned to in_progress — use response directly.
-            // Do NOT fetch getDebateDetail here — it can return stale "prematch"
-            // data and revert the status, causing a flash loop. The Realtime
-            // subscription and in-progress poll will sync remaining fields.
+            // Debate already transitioned to in_progress — use full response data.
             if (result?.alreadyStarted) {
-              setDebate((d) => ({ ...d, status: result.status || "in_progress" }));
+              setDebate((d) => ({
+                ...d,
+                status: result.status || "in_progress",
+                phase: result.phase || "opening_pro",
+                started_at: result.started_at || d.started_at,
+              }));
               return; // stop loop
             }
           } catch (err) {
@@ -638,9 +640,14 @@ export default function DebateClient({ initialDebate, params }) {
 
   // ─── LIVE DEBATE ─────────────────────────────────────
   if (debate.status === "in_progress") {
-    const currentSpeaker = debate.phase?.includes("pro")
+    // Safety net: in_progress MUST have a real phase. If a race condition
+    // left phase as "prematch", force to "opening_pro" so the timer starts.
+    const activePhase = (!debate.phase || debate.phase === "prematch")
+      ? "opening_pro"
+      : debate.phase;
+    const currentSpeaker = activePhase?.includes("pro")
       ? "pro"
-      : debate.phase?.includes("con")
+      : activePhase?.includes("con")
       ? "con"
       : "both";
 
@@ -676,10 +683,10 @@ export default function DebateClient({ initialDebate, params }) {
               <div
                 key={p}
                 className={`w-2 h-2 rounded-full ${
-                  p === debate.phase
+                  p === activePhase
                     ? "bg-arena-accent"
                     : PHASE_ORDER.indexOf(p) <
-                      PHASE_ORDER.indexOf(debate.phase)
+                      PHASE_ORDER.indexOf(activePhase)
                     ? "bg-arena-accent/40"
                     : "bg-arena-border"
                 }`}
@@ -691,7 +698,7 @@ export default function DebateClient({ initialDebate, params }) {
         {/* Timer */}
         <div className="flex justify-center mb-8">
           <PhaseTimer
-            phase={debate.phase}
+            phase={activePhase}
             timeLimit={debate.time_limit}
             onTimeUp={handleTimeUp}
             debateStartedAt={debate.started_at}
