@@ -87,9 +87,21 @@ export default function DebateClient({ initialDebate, params }) {
       });
   }, [debateId]);
 
-  // Realtime debate updates
+  // Realtime debate updates — guard against status regression.
+  // Supabase Realtime can deliver events out of order (e.g. the ready-flag
+  // UPDATE with status="prematch" arrives AFTER we locally set "in_progress").
+  const STATUS_RANK = { prematch: 0, in_progress: 1, forfeiting: 2, completed: 3, forfeited: 3, cancelled: 3 };
   const onDebateChange = useCallback((updated) => {
-    setDebate((prev) => ({ ...prev, ...updated }));
+    setDebate((prev) => {
+      const prevRank = STATUS_RANK[prev?.status] ?? -1;
+      const newRank = STATUS_RANK[updated?.status] ?? -1;
+      if (updated?.status && newRank < prevRank) {
+        // Stale event — keep current status but merge other fields
+        const { status, phase, ...rest } = updated;
+        return { ...prev, ...rest };
+      }
+      return { ...prev, ...updated };
+    });
   }, []);
   useRealtimeDebate(debateId, onDebateChange);
 
