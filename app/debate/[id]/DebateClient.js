@@ -146,7 +146,10 @@ export default function DebateClient({ initialDebate, params }) {
           setOpponentReady(true);
         }
       })
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error(`[Realtime] ready:${debateId} error:`, err);
+        else console.log(`[Realtime] ready:${debateId} →`, status);
+      });
 
     readyChannelRef.current = channel;
 
@@ -186,6 +189,15 @@ export default function DebateClient({ initialDebate, params }) {
             if (result?.cancelled || result?.alreadyCancelled) {
               setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
               return; // done — cancelled UI will render
+            }
+            // Debate already transitioned to in_progress — fetch latest state
+            if (result?.alreadyStarted) {
+              const data = await getDebateDetail(debateId);
+              const updated = data?.debate || data;
+              if (updated?.status) {
+                setDebate((d) => ({ ...d, ...updated }));
+              }
+              return; // stop loop unconditionally
             }
           } catch (err) {
             console.error("Auto-cancel network error:", err);
