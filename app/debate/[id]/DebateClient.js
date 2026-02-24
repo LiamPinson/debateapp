@@ -51,7 +51,23 @@ export default function DebateClient({ initialDebate, params }) {
   const { id: debateId } = params;
   const router = useRouter();
   const { user, session } = useSession();
-  const [debate, setDebate] = useState(initialDebate || null);
+  const [debate, setDebateRaw] = useState(initialDebate || null);
+
+  // Guarded setter — NEVER allows status to regress (e.g. in_progress → prematch).
+  // Every external data merge must use this instead of setDebateRaw.
+  const setDebate = useCallback((updater) => {
+    setDebateRaw((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (!next || !prev) return next;
+      const prevP = STATUS_PRIORITY[prev.status] ?? -1;
+      const nextP = STATUS_PRIORITY[next.status] ?? -1;
+      if (nextP < prevP) {
+        // Block regression — keep current status/phase, merge everything else
+        return { ...next, status: prev.status, phase: prev.phase };
+      }
+      return next;
+    });
+  }, []);
   const [loading, setLoading] = useState(!initialDebate);
   const [dailyToken, setDailyToken] = useState(null);
   const [tokenLoading, setTokenLoading] = useState(false);
