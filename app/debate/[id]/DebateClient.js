@@ -190,14 +190,12 @@ export default function DebateClient({ initialDebate, params }) {
               setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
               return; // done — cancelled UI will render
             }
-            // Debate already transitioned to in_progress — use response directly
+            // Debate already transitioned to in_progress — use response directly.
+            // Do NOT fetch getDebateDetail here — it can return stale "prematch"
+            // data and revert the status, causing a flash loop. The Realtime
+            // subscription and in-progress poll will sync remaining fields.
             if (result?.alreadyStarted) {
               setDebate((d) => ({ ...d, status: result.status || "in_progress" }));
-              // Fetch full detail in background for all fields
-              getDebateDetail(debateId).then((data) => {
-                const updated = data?.debate || data;
-                if (updated?.status) setDebate((d) => ({ ...d, ...updated }));
-              });
               return; // stop loop
             }
           } catch (err) {
