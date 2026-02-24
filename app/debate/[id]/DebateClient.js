@@ -190,14 +190,15 @@ export default function DebateClient({ initialDebate, params }) {
               setDebate((d) => ({ ...d, status: "cancelled", phase: "ended" }));
               return; // done — cancelled UI will render
             }
-            // Debate already transitioned to in_progress — fetch latest state
+            // Debate already transitioned to in_progress — use response directly
             if (result?.alreadyStarted) {
-              const data = await getDebateDetail(debateId);
-              const updated = data?.debate || data;
-              if (updated?.status) {
-                setDebate((d) => ({ ...d, ...updated }));
-              }
-              return; // stop loop unconditionally
+              setDebate((d) => ({ ...d, status: result.status || "in_progress" }));
+              // Fetch full detail in background for all fields
+              getDebateDetail(debateId).then((data) => {
+                const updated = data?.debate || data;
+                if (updated?.status) setDebate((d) => ({ ...d, ...updated }));
+              });
+              return; // stop loop
             }
           } catch (err) {
             console.error("Auto-cancel network error:", err);
@@ -353,23 +354,38 @@ export default function DebateClient({ initialDebate, params }) {
         return;
       }
 
-      // Always fetch fresh state after readying — the server may have
-      // started the debate even if our response doesn't explicitly say so
-      // (e.g. opponent readied milliseconds before us).
-      try {
-        const data = await getDebateDetail(debateId);
-        const updated = data?.debate || data;
-        if (updated) {
-          if (updated.status !== "prematch") {
-            setDebate((d) => ({ ...d, ...updated }));
-          }
-          // Sync opponent ready indicator
-          if (mySide === "pro" && updated.con_ready) setOpponentReady(true);
-          if (mySide === "con" && updated.pro_ready) setOpponentReady(true);
-        }
-      } catch {
-        // getDebateDetail failed — the 1s poll will pick it up
+      // Server confirmed both ready — debate is live. Use response data
+      // directly instead of fetching (avoids DB replication lag).
+      if (result?.bothReady) {
+        setDebate((d) => ({
+          ...d,
+          status: result.status || "in_progress",
+          phase: result.phase || "opening_pro",
+          started_at: result.started_at,
+          pro_ready: true,
+          con_ready: true,
+        }));
+        setOpponentReady(true);
+        return;
       }
+
+      // Opponent won the ready race — debate already started.
+      if (result?.alreadyStarted) {
+        setDebate((d) => ({
+          ...d,
+          status: result.status || "in_progress",
+          phase: result.phase || "opening_pro",
+          started_at: result.started_at,
+          pro_ready: result.pro_ready,
+          con_ready: result.con_ready,
+        }));
+        setOpponentReady(true);
+        return;
+      }
+
+      // Only one side ready — sync opponent flag from response or fetch.
+      if (mySide === "pro" && result?.con_ready) setOpponentReady(true);
+      if (mySide === "con" && result?.pro_ready) setOpponentReady(true);
     } catch (err) {
       console.error("setReady network error:", err);
       setMyReady(false); // revert optimistic update

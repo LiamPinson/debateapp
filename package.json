@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@daily-co/daily-js": "^0.62.0",
+    "@daily-co/daily-js": "^0.76.0",
     "@deepgram/sdk": "^3.9.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
