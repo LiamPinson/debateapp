@@ -40,11 +40,10 @@ const PHASE_ORDER = [
 const STATUS_PRIORITY = {
   prematch: 0,
   in_progress: 1,
-  forfeiting: 2,
-  completed: 3,
-  forfeited: 3,
-  cancelled: 3,
-  pipeline_failed: 3,
+  completed: 2,
+  forfeited: 2,
+  cancelled: 2,
+  pipeline_failed: 2,
 };
 
 export default function DebateClient({ initialDebate, params }) {
@@ -123,11 +122,20 @@ export default function DebateClient({ initialDebate, params }) {
   // has the "in_progress" state, blindly merging would reset to "prematch" and create
   // an infinite loop (prematch poll restarts, auto-cancel fires, ready channel cycles).
   const onDebateChange = useCallback((updated) => {
+    console.log("[Realtime] debate change received:", {
+      newStatus: updated?.status,
+      newPhase: updated?.phase,
+      readyFlags: { pro: updated?.pro_ready, con: updated?.con_ready }
+    });
     setDebate((prev) => {
       const prevPriority = STATUS_PRIORITY[prev?.status] ?? -1;
       const newPriority = STATUS_PRIORITY[updated?.status] ?? -1;
       if (updated?.status && newPriority < prevPriority) {
         // Stale event — keep current status/phase but merge other fields (e.g. ready flags)
+        console.log("[Realtime] BLOCKED stale event:", {
+          prevStatus: prev?.status,
+          attemptedStatus: updated?.status
+        });
         const { status, phase, ...rest } = updated;
         return { ...prev, ...rest };
       }
@@ -330,15 +338,13 @@ export default function DebateClient({ initialDebate, params }) {
     }
   }, [debate, debateId, mySide]);
 
-  // Poll while in_progress OR in the transitional "forfeiting" state.
-  // Keeps polling until we reach a terminal status (completed/forfeited/cancelled).
-  // Realtime is unavailable for guests so this is the only way to detect
-  // an opponent forfeit or pipeline completion.
+  // Poll while in_progress. Keeps polling until we reach a terminal status
+  // (completed/forfeited/cancelled). Realtime is unavailable for guests so this is
+  // the only way to detect an opponent forfeit or pipeline completion.
   // Also syncs fresh data every tick (defense-in-depth: corrects wrong phase
   // if a stale Realtime event slipped through before the priority guard).
   useEffect(() => {
-    const active_status = debate?.status === "in_progress" || debate?.status === "forfeiting";
-    if (!active_status) return;
+    if (debate?.status !== "in_progress") return;
 
     let active = true;
     const poll = async () => {
@@ -349,18 +355,22 @@ export default function DebateClient({ initialDebate, params }) {
         const updated = data?.debate || data;
         if (!updated) { if (active) setTimeout(poll, 1000); return; }
 
-        const s = updated.status;
-        if (s && s !== "in_progress" && s !== "forfeiting") {
+        // Terminal statuses: completed, forfeited, cancelled, pipeline_failed
+        const terminalStatuses = ["completed", "forfeited", "cancelled", "pipeline_failed"];
+        if (updated.status && terminalStatuses.includes(updated.status)) {
           setDebate((d) => ({ ...d, ...updated }));
-          return; // terminal state reached — stop
+          return; // stop polling
         }
-        // Always sync fresh data (fixes wrong phase, started_at, etc.)
-        setDebate((d) => ({ ...d, ...updated }));
+
+        // Still active: sync fresh data (corrects phase, timestamps, etc.)
+        if (updated.status === "in_progress") {
+          setDebate((d) => ({ ...d, ...updated }));
+        }
       } catch { /* ignore transient errors */ }
       if (active) setTimeout(poll, 1000);
     };
 
-    // Poll every 1 s so forfeit notification is near-instant
+    // Poll every 1 s so forfeit/completion notification is near-instant
     const timeout = setTimeout(poll, 1000);
     return () => {
       active = false;
@@ -368,12 +378,47 @@ export default function DebateClient({ initialDebate, params }) {
     };
   }, [debate?.status, debateId]);
 
-  // Forfeit handler — navigate home after forfeiting; opponent detects via polling
+  // Forfeit handler — verify forfeit succeeded before redirecting
   const handleForfeit = async () => {
     if (!mySide) return;
-    await forfeitDebate(debateId, mySide);
-    setForfeitConfirm(false);
-    router.push("/");
+
+    try {
+      const result = await forfeitDebate(debateId, mySide);
+
+      // Check for API errors
+      if (result?.error) {
+        console.error("Forfeit API error:", result.error);
+        alert("Failed to forfeit: " + (result.error || "Unknown error"));
+        setForfeitConfirm(false);
+        return;
+      }
+
+      // Verify forfeit was accepted
+      if (!result?.success && !result?.forfeited) {
+        console.error("Forfeit not confirmed by server:", result);
+        alert("Forfeit was not processed correctly. Please try again.");
+        setForfeitConfirm(false);
+        return;
+      }
+
+      // Update local state to terminal
+      setDebate((d) => ({
+        ...d,
+        status: "forfeited",
+        phase: "ended",
+        winner: result.winner,
+        completed_at: result.completed_at,
+      }));
+
+      setForfeitConfirm(false);
+
+      // Give UI a moment to update before redirecting
+      setTimeout(() => router.push("/"), 500);
+    } catch (err) {
+      console.error("Forfeit error:", err);
+      alert("Failed to forfeit: " + (err.message || "Network error"));
+      setForfeitConfirm(false);
+    }
   };
 
   // Vote handler
@@ -421,6 +466,19 @@ export default function DebateClient({ initialDebate, params }) {
           con_ready: true,
         }));
         setOpponentReady(true);
+
+        // Safety net: if we don't see in_progress after 3 seconds, force-refresh
+        setTimeout(() => {
+          if (debate?.status === "prematch") {
+            console.warn("Safety net: debate still in prematch after ready confirmation, force-refreshing");
+            getDebateDetail(debateId).then((data) => {
+              const fresh = data?.debate || data;
+              if (fresh && fresh.status !== "prematch") {
+                setDebate((d) => ({ ...d, ...fresh }));
+              }
+            });
+          }
+        }, 3000);
         return;
       }
 
@@ -1051,14 +1109,11 @@ export default function DebateClient({ initialDebate, params }) {
     );
   }
 
-  // ─── TRANSITIONAL / PROCESSING ───────────────────────
-  // Shown while status is "forfeiting", "processing", or "pipeline_failed".
-  // The in-progress poll continues running and will update debate state
-  // once the pipeline resolves to a terminal status.
+  // ─── PIPELINE PROCESSING / ERRORS ───────────────────────
+  // Shown while pipeline is processing results or if it fails.
+  // Terminal statuses (forfeited/completed/cancelled) render their own screens above.
   const processingMessage =
-    debate.status === "forfeiting"
-      ? "Opponent forfeited — wrapping up..."
-      : debate.status === "pipeline_failed"
+    debate.status === "pipeline_failed"
       ? "Something went wrong processing results."
       : "Processing results...";
 

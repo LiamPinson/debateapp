@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { createServiceClient } from "@/lib/supabase";
-import { startRecording } from "@/lib/daily";
-import { processDebateCompletion, processDebateForfeit } from "@/lib/pipeline";
+import { startRecording, stopRecording, deleteDailyRoom } from "@/lib/daily";
+import { processDebateCompletion } from "@/lib/pipeline";
 
 export const maxDuration = 300;
 
@@ -59,14 +59,14 @@ export async function POST(request) {
           .update({ [readyField]: true })
           .eq("id", debateId)
           .eq("status", "prematch")
-          .select("pro_ready, con_ready")
+          .select("pro_ready, con_ready, status, phase, started_at")
           .maybeSingle();
 
         if (readyErr) {
           return NextResponse.json({ error: readyErr.message }, { status: 500 });
         }
 
-        // Debate was already started (prematch guard matched 0 rows) — return current state.
+        // Debate was already started (prematch guard matched 0 rows) — fetch current state.
         if (!readyResult) {
           const { data: current } = await db
             .from("debates")
@@ -82,18 +82,47 @@ export async function POST(request) {
 
         // Both sides ready → start the debate atomically.
         if (readyResult.pro_ready && readyResult.con_ready) {
+          const now = new Date().toISOString();
           const { data: started } = await db
             .from("debates")
             .update({
               status: "in_progress",
               phase: "opening_pro",
-              started_at: new Date().toISOString(),
+              started_at: now,
             })
             .eq("id", debateId)
             .eq("status", "prematch")
-            .select("status, phase, started_at, daily_room_name")
+            .select("status, phase, started_at, daily_room_name, daily_room_url")
             .maybeSingle();
 
+          // If update failed (debate already in_progress), fetch fresh state
+          if (!started) {
+            const { data: current } = await db
+              .from("debates")
+              .select("status, phase, started_at, daily_room_name, daily_room_url")
+              .eq("id", debateId)
+              .single();
+
+            if (current?.status === "in_progress") {
+              // Started by the other player — start recording if not already
+              if (current?.daily_room_name) {
+                startRecording(current.daily_room_name).catch((err) =>
+                  console.error("Recording start failed:", err)
+                );
+              }
+              return NextResponse.json({
+                success: true,
+                bothReady: true,
+                status: current.status,
+                phase: current.phase,
+                started_at: current.started_at,
+                daily_room_name: current.daily_room_name,
+                daily_room_url: current.daily_room_url,
+              });
+            }
+          }
+
+          // Update succeeded — we started it
           // Start recording (fire-and-forget).
           if (started?.daily_room_name) {
             startRecording(started.daily_room_name).catch((err) =>
@@ -106,9 +135,9 @@ export async function POST(request) {
             bothReady: true,
             status: started?.status || "in_progress",
             phase: started?.phase || "opening_pro",
-            started_at: started?.started_at || new Date().toISOString(),
-            pro_ready: true,
-            con_ready: true,
+            started_at: started?.started_at || now,
+            daily_room_name: started?.daily_room_name,
+            daily_room_url: started?.daily_room_url,
           });
         }
 
@@ -118,6 +147,7 @@ export async function POST(request) {
           bothReady: false,
           pro_ready: readyResult.pro_ready,
           con_ready: readyResult.con_ready,
+          status: readyResult.status,
         });
       }
 
@@ -345,20 +375,31 @@ export async function POST(request) {
 
       // ---- FORFEIT ----
       case "forfeit": {
-        if (!side) {
+        if (!side || !["pro", "con"].includes(side)) {
           return NextResponse.json(
-            { error: "side required for forfeit" },
+            { error: "side required (pro or con)" },
             { status: 400 }
           );
         }
 
-        // Atomic: only forfeit if still in_progress
+        // Atomic: only forfeit if still in_progress. NO transitional state.
+        // Set debate to terminal "forfeited" state INLINE before returning.
+        // This prevents debates from getting stuck in "forfeiting" when Vercel kills waitUntil.
+        const winner = side === "pro" ? "con" : "pro";
+        const now = new Date().toISOString();
+
         const { data: forfeitResult, error: forfeitErr } = await db
           .from("debates")
-          .update({ status: "forfeiting" }) // transitional status to prevent double-forfeit
+          .update({
+            status: "forfeited",
+            phase: "ended",
+            winner,
+            winner_source: "forfeit",
+            completed_at: now,
+          })
           .eq("id", debateId)
           .eq("status", "in_progress")
-          .select("id")
+          .select("id, daily_room_name, pro_user_id, con_user_id, pro_username, con_username")
           .maybeSingle();
 
         if (forfeitErr) {
@@ -369,22 +410,88 @@ export async function POST(request) {
           );
         }
 
+        // Already ended (CAS guard prevented update)
         if (!forfeitResult) {
+          const { data: current } = await db
+            .from("debates")
+            .select("status, phase, winner, completed_at")
+            .eq("id", debateId)
+            .single();
           return NextResponse.json({
             success: true,
             alreadyEnded: true,
+            status: current?.status,
+            phase: current?.phase,
           });
         }
 
+        // Non-critical cleanup: W/L stats update + room teardown
+        // Fire-and-forget so forfeiting user gets immediate response
         waitUntil(
-          processDebateForfeit(debateId, side).catch((err) => {
-            console.error("Forfeit pipeline failed:", err);
-            db.from("debates")
-              .update({ status: "pipeline_failed" })
-              .eq("id", debateId);
-          })
+          (async () => {
+            try {
+              const winnerId = winner === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
+              const loserId = side === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
+
+              // Update winner W/L
+              if (winnerId) {
+                await db.rpc("increment_wins", { user_uuid: winnerId }).catch(async () => {
+                  const { data: user } = await db
+                    .from("users")
+                    .select("wins, total_debates")
+                    .eq("id", winnerId)
+                    .single();
+                  if (user) {
+                    await db
+                      .from("users")
+                      .update({ wins: (user.wins || 0) + 1, total_debates: (user.total_debates || 0) + 1 })
+                      .eq("id", winnerId);
+                  }
+                });
+              }
+
+              // Update loser W/L
+              if (loserId) {
+                await db.rpc("increment_losses", { user_uuid: loserId }).catch(async () => {
+                  const { data: user } = await db
+                    .from("users")
+                    .select("losses, total_debates")
+                    .eq("id", loserId)
+                    .single();
+                  if (user) {
+                    await db
+                      .from("users")
+                      .update({ losses: (user.losses || 0) + 1, total_debates: (user.total_debates || 0) + 1 })
+                      .eq("id", loserId);
+                  }
+                });
+              }
+
+              // Cleanup Daily room
+              if (forfeitResult.daily_room_name) {
+                try {
+                  await stopRecording(forfeitResult.daily_room_name).catch(() => {});
+                  await deleteDailyRoom(forfeitResult.daily_room_name).catch(() => {});
+                } catch (err) {
+                  console.error("Forfeit room cleanup failed (non-critical):", err);
+                }
+              }
+            } catch (err) {
+              console.error("Forfeit cleanup task failed (non-critical):", err);
+            }
+          })()
         );
-        return NextResponse.json({ success: true, forfeited_by: side });
+
+        // Return full debate state so clients don't need to re-fetch
+        return NextResponse.json({
+          success: true,
+          forfeited: true,
+          status: "forfeited",
+          phase: "ended",
+          winner,
+          forfeiting_side: side,
+          completed_at: now,
+        });
       }
 
       default:
