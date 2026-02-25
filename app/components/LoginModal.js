@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSession } from "@/lib/SessionContext";
 import { loginWithPassword } from "@/lib/api-client";
 import { createOAuthClient } from "@/lib/supabase";
+import ForgotPasswordModal from "./ForgotPasswordModal";
 
 const SESSION_KEY = "debate_session_token";
 
@@ -24,6 +25,7 @@ export default function LoginModal({ open, onClose }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   if (!open) return null;
 
@@ -101,7 +103,16 @@ export default function LoginModal({ open, onClose }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Password</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium">Password</label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-xs text-arena-accent hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <input
                 type="password"
                 value={password}
@@ -132,6 +143,12 @@ export default function LoginModal({ open, onClose }) {
             </div>
           </form>
         </div>
+
+        <ForgotPasswordModal
+          open={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+          onBackToLogin={() => setShowForgotPassword(false)}
+        />
       </div>
     </div>
   );
