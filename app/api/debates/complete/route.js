@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { createServiceClient } from "@/lib/supabase";
-import { startRecording } from "@/lib/daily";
-import { processDebateCompletion, processDebateForfeit } from "@/lib/pipeline";
+import { startRecording, stopRecording, deleteDailyRoom } from "@/lib/daily";
+import { processDebateCompletion } from "@/lib/pipeline";
 
 export const maxDuration = 300;
 
@@ -352,13 +352,25 @@ export async function POST(request) {
           );
         }
 
-        // Atomic: only forfeit if still in_progress
+        const winner = side === "pro" ? "con" : "pro";
+
+        // Atomic: go directly to terminal "forfeited" state inline.
+        // The CAS guard (.eq status in_progress) prevents double-forfeit.
+        // Previous approach used a transitional "forfeiting" status + waitUntil
+        // pipeline, but Vercel kept killing the background work before the
+        // critical DB update completed, leaving debates stuck forever.
         const { data: forfeitResult, error: forfeitErr } = await db
           .from("debates")
-          .update({ status: "forfeiting" }) // transitional status to prevent double-forfeit
+          .update({
+            status: "forfeited",
+            phase: "ended",
+            winner,
+            winner_source: "forfeit",
+            completed_at: new Date().toISOString(),
+          })
           .eq("id", debateId)
           .eq("status", "in_progress")
-          .select("id")
+          .select("id, daily_room_name, pro_user_id, con_user_id")
           .maybeSingle();
 
         if (forfeitErr) {
@@ -376,13 +388,32 @@ export async function POST(request) {
           });
         }
 
+        // Non-critical cleanup (W/L stats, room teardown) — fire-and-forget
         waitUntil(
-          processDebateForfeit(debateId, side).catch(async (err) => {
-            console.error("Forfeit pipeline failed:", err);
-            await db.from("debates")
-              .update({ status: "pipeline_failed" })
-              .eq("id", debateId);
-          })
+          (async () => {
+            try {
+              const winnerId = winner === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
+              const loserId = side === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
+              if (winnerId) {
+                await db.rpc("increment_wins", { user_uuid: winnerId }).catch(async () => {
+                  const { data } = await db.from("users").select("wins, total_debates").eq("id", winnerId).single();
+                  if (data) await db.from("users").update({ wins: data.wins + 1, total_debates: data.total_debates + 1 }).eq("id", winnerId);
+                });
+              }
+              if (loserId) {
+                await db.rpc("increment_losses", { user_uuid: loserId }).catch(async () => {
+                  const { data } = await db.from("users").select("losses, total_debates").eq("id", loserId).single();
+                  if (data) await db.from("users").update({ losses: data.losses + 1, total_debates: data.total_debates + 1 }).eq("id", loserId);
+                });
+              }
+              if (forfeitResult.daily_room_name) {
+                await stopRecording(forfeitResult.daily_room_name).catch(() => {});
+                await deleteDailyRoom(forfeitResult.daily_room_name).catch(() => {});
+              }
+            } catch (err) {
+              console.error("Forfeit cleanup failed (non-critical):", err);
+            }
+          })()
         );
         return NextResponse.json({ success: true, forfeited_by: side });
       }
