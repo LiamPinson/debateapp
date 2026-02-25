@@ -127,11 +127,20 @@ export default function DebateClient({ initialDebate, params }) {
   // has the "in_progress" state, blindly merging would reset to "prematch" and create
   // an infinite loop (prematch poll restarts, auto-cancel fires, ready channel cycles).
   const onDebateChange = useCallback((updated) => {
+    console.log("[Realtime] debate change received:", {
+      newStatus: updated?.status,
+      newPhase: updated?.phase,
+      readyFlags: { pro: updated?.pro_ready, con: updated?.con_ready }
+    });
     setDebate((prev) => {
       const prevPriority = STATUS_PRIORITY[prev?.status] ?? -1;
       const newPriority = STATUS_PRIORITY[updated?.status] ?? -1;
       if (updated?.status && newPriority < prevPriority) {
         // Stale event — keep current status/phase but merge other fields (e.g. ready flags)
+        console.log("[Realtime] BLOCKED stale event:", {
+          prevStatus: prev?.status,
+          attemptedStatus: updated?.status
+        });
         const { status, phase, ...rest } = updated;
         return { ...prev, ...rest };
       }
@@ -441,6 +450,19 @@ export default function DebateClient({ initialDebate, params }) {
           con_ready: true,
         }));
         setOpponentReady(true);
+
+        // Safety net: if we don't see in_progress after 3 seconds, force-refresh
+        setTimeout(() => {
+          if (debate?.status === "prematch") {
+            console.warn("Safety net: debate still in prematch after ready confirmation, force-refreshing");
+            getDebateDetail(debateId).then((data) => {
+              const fresh = data?.debate || data;
+              if (fresh && fresh.status !== "prematch") {
+                setDebate((d) => ({ ...d, ...fresh }));
+              }
+            });
+          }
+        }, 3000);
         return;
       }
 
