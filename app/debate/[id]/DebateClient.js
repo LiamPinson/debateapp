@@ -84,6 +84,10 @@ export default function DebateClient({ initialDebate, params }) {
   const [prematchSecondsLeft, setPrematchSecondsLeft] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
+  // ── Forfeiting stuck detection ──
+  const [forfeitingStuck, setForfeitingStuck] = useState(false);
+  const forfeitingTimerRef = useRef(null);
+
   // Determine which side the current user is on
   const mySide =
     debate?.pro_user_id === user?.id ||
@@ -367,6 +371,22 @@ export default function DebateClient({ initialDebate, params }) {
       clearTimeout(timeout);
     };
   }, [debate?.status, debateId]);
+
+  // ── Detect stuck "forfeiting" state (pipeline crashed) ──
+  // If the debate stays in "forfeiting" for > 30s, the server-side safety net
+  // in the detail API should auto-resolve it. Flag it client-side too so we
+  // can show a better message instead of an infinite spinner.
+  useEffect(() => {
+    if (debate?.status === "forfeiting") {
+      forfeitingTimerRef.current = setTimeout(() => {
+        setForfeitingStuck(true);
+      }, 30_000);
+      return () => clearTimeout(forfeitingTimerRef.current);
+    }
+    // Reset when leaving forfeiting state
+    setForfeitingStuck(false);
+    if (forfeitingTimerRef.current) clearTimeout(forfeitingTimerRef.current);
+  }, [debate?.status]);
 
   // Forfeit handler — navigate home after forfeiting; opponent detects via polling
   const handleForfeit = async () => {
@@ -1056,15 +1076,19 @@ export default function DebateClient({ initialDebate, params }) {
   // The in-progress poll continues running and will update debate state
   // once the pipeline resolves to a terminal status.
   const processingMessage =
-    debate.status === "forfeiting"
-      ? "Opponent forfeited — wrapping up..."
-      : debate.status === "pipeline_failed"
+    debate.status === "pipeline_failed"
       ? "Something went wrong processing results."
+      : debate.status === "forfeiting" && forfeitingStuck
+      ? "Something went wrong — the match has ended."
+      : debate.status === "forfeiting"
+      ? "Opponent forfeited — wrapping up..."
       : "Processing results...";
+
+  const showSpinner = debate.status !== "pipeline_failed" && !forfeitingStuck;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-      {debate.status !== "pipeline_failed" && (
+      {showSpinner && (
         <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
       )}
       <p className="text-arena-muted">{processingMessage}</p>

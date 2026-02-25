@@ -288,9 +288,9 @@ export async function POST(request) {
         // If we transitioned to 'ended', trigger the async processing pipeline
         if (phase === "ended") {
           waitUntil(
-            processDebateCompletion(debateId).catch((err) => {
+            processDebateCompletion(debateId).catch(async (err) => {
               console.error("Pipeline failed:", err);
-              db.from("debates")
+              await db.from("debates")
                 .update({ status: "pipeline_failed" })
                 .eq("id", debateId);
             })
@@ -332,9 +332,9 @@ export async function POST(request) {
 
         // Trigger pipeline
         waitUntil(
-          processDebateCompletion(debateId).catch((err) => {
+          processDebateCompletion(debateId).catch(async (err) => {
             console.error("Pipeline failed:", err);
-            db.from("debates")
+            await db.from("debates")
               .update({ status: "pipeline_failed" })
               .eq("id", debateId);
           })
@@ -377,9 +377,9 @@ export async function POST(request) {
         }
 
         waitUntil(
-          processDebateForfeit(debateId, side).catch((err) => {
+          processDebateForfeit(debateId, side).catch(async (err) => {
             console.error("Forfeit pipeline failed:", err);
-            db.from("debates")
+            await db.from("debates")
               .update({ status: "pipeline_failed" })
               .eq("id", debateId);
           })

@@ -69,6 +69,43 @@ export async function GET(request) {
       }
     }
 
+    // ── Server-side "forfeiting" stuck safety net ──
+    // If the debate has been in the transitional "forfeiting" state for more
+    // than 30 seconds, the pipeline likely crashed or Vercel killed the
+    // function. Auto-complete the forfeit so the client isn't stuck forever.
+    if (debate.status === "forfeiting") {
+      // Use updated_at (set when status changed to "forfeiting") or fall back to started_at
+      const stuckSince = debate.updated_at || debate.started_at || debate.created_at;
+      const stuckMs = stuckSince ? Date.now() - new Date(stuckSince).getTime() : Infinity;
+      const FORFEITING_TIMEOUT_MS = 30_000; // 30s is more than enough for the pipeline
+
+      if (stuckMs > FORFEITING_TIMEOUT_MS) {
+        // We don't know which side forfeited, so mark as pipeline_failed
+        // unless we can infer from existing data.
+        const { data: autoResolved } = await db
+          .from("debates")
+          .update({
+            status: "pipeline_failed",
+            phase: "ended",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", debateId)
+          .eq("status", "forfeiting") // CAS guard
+          .select("id")
+          .maybeSingle();
+
+        if (autoResolved) {
+          // Re-fetch to return the resolved state
+          const { data: refreshed } = await db
+            .from("debates")
+            .select("*, topics(title, short_title, category, description)")
+            .eq("id", debateId)
+            .single();
+          if (refreshed) Object.assign(debate, refreshed);
+        }
+      }
+    }
+
     // Fetch user display names separately
     const [proUser, conUser] = await Promise.all([
       debate.pro_user_id
