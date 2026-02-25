@@ -318,9 +318,9 @@ export async function POST(request) {
         // If we transitioned to 'ended', trigger the async processing pipeline
         if (phase === "ended") {
           waitUntil(
-            processDebateCompletion(debateId).catch((err) => {
+            processDebateCompletion(debateId).catch(async (err) => {
               console.error("Pipeline failed:", err);
-              db.from("debates")
+              await db.from("debates")
                 .update({ status: "pipeline_failed" })
                 .eq("id", debateId);
             })
@@ -362,9 +362,9 @@ export async function POST(request) {
 
         // Trigger pipeline
         waitUntil(
-          processDebateCompletion(debateId).catch((err) => {
+          processDebateCompletion(debateId).catch(async (err) => {
             console.error("Pipeline failed:", err);
-            db.from("debates")
+            await db.from("debates")
               .update({ status: "pipeline_failed" })
               .eq("id", debateId);
           })
@@ -375,19 +375,20 @@ export async function POST(request) {
 
       // ---- FORFEIT ----
       case "forfeit": {
-        if (!side || !["pro", "con"].includes(side)) {
+        if (!side) {
           return NextResponse.json(
-            { error: "side required (pro or con)" },
+            { error: "side required for forfeit" },
             { status: 400 }
           );
         }
 
-        // Atomic: only forfeit if still in_progress. NO transitional state.
-        // Set debate to terminal "forfeited" state INLINE before returning.
-        // This prevents debates from getting stuck in "forfeiting" when Vercel kills waitUntil.
         const winner = side === "pro" ? "con" : "pro";
-        const now = new Date().toISOString();
 
+        // Atomic: go directly to terminal "forfeited" state inline.
+        // The CAS guard (.eq status in_progress) prevents double-forfeit.
+        // Previous approach used a transitional "forfeiting" status + waitUntil
+        // pipeline, but Vercel kept killing the background work before the
+        // critical DB update completed, leaving debates stuck forever.
         const { data: forfeitResult, error: forfeitErr } = await db
           .from("debates")
           .update({
@@ -395,11 +396,11 @@ export async function POST(request) {
             phase: "ended",
             winner,
             winner_source: "forfeit",
-            completed_at: now,
+            completed_at: new Date().toISOString(),
           })
           .eq("id", debateId)
           .eq("status", "in_progress")
-          .select("id, daily_room_name, pro_user_id, con_user_id, pro_username, con_username")
+          .select("id, daily_room_name, pro_user_id, con_user_id")
           .maybeSingle();
 
         if (forfeitErr) {
@@ -410,88 +411,41 @@ export async function POST(request) {
           );
         }
 
-        // Already ended (CAS guard prevented update)
         if (!forfeitResult) {
-          const { data: current } = await db
-            .from("debates")
-            .select("status, phase, winner, completed_at")
-            .eq("id", debateId)
-            .single();
           return NextResponse.json({
             success: true,
             alreadyEnded: true,
-            status: current?.status,
-            phase: current?.phase,
           });
         }
 
-        // Non-critical cleanup: W/L stats update + room teardown
-        // Fire-and-forget so forfeiting user gets immediate response
+        // Non-critical cleanup (W/L stats, room teardown) — fire-and-forget
         waitUntil(
           (async () => {
             try {
               const winnerId = winner === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
               const loserId = side === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
-
-              // Update winner W/L
               if (winnerId) {
                 await db.rpc("increment_wins", { user_uuid: winnerId }).catch(async () => {
-                  const { data: user } = await db
-                    .from("users")
-                    .select("wins, total_debates")
-                    .eq("id", winnerId)
-                    .single();
-                  if (user) {
-                    await db
-                      .from("users")
-                      .update({ wins: (user.wins || 0) + 1, total_debates: (user.total_debates || 0) + 1 })
-                      .eq("id", winnerId);
-                  }
+                  const { data } = await db.from("users").select("wins, total_debates").eq("id", winnerId).single();
+                  if (data) await db.from("users").update({ wins: data.wins + 1, total_debates: data.total_debates + 1 }).eq("id", winnerId);
                 });
               }
-
-              // Update loser W/L
               if (loserId) {
                 await db.rpc("increment_losses", { user_uuid: loserId }).catch(async () => {
-                  const { data: user } = await db
-                    .from("users")
-                    .select("losses, total_debates")
-                    .eq("id", loserId)
-                    .single();
-                  if (user) {
-                    await db
-                      .from("users")
-                      .update({ losses: (user.losses || 0) + 1, total_debates: (user.total_debates || 0) + 1 })
-                      .eq("id", loserId);
-                  }
+                  const { data } = await db.from("users").select("losses, total_debates").eq("id", loserId).single();
+                  if (data) await db.from("users").update({ losses: data.losses + 1, total_debates: data.total_debates + 1 }).eq("id", loserId);
                 });
               }
-
-              // Cleanup Daily room
               if (forfeitResult.daily_room_name) {
-                try {
-                  await stopRecording(forfeitResult.daily_room_name).catch(() => {});
-                  await deleteDailyRoom(forfeitResult.daily_room_name).catch(() => {});
-                } catch (err) {
-                  console.error("Forfeit room cleanup failed (non-critical):", err);
-                }
+                await stopRecording(forfeitResult.daily_room_name).catch(() => {});
+                await deleteDailyRoom(forfeitResult.daily_room_name).catch(() => {});
               }
             } catch (err) {
-              console.error("Forfeit cleanup task failed (non-critical):", err);
+              console.error("Forfeit cleanup failed (non-critical):", err);
             }
           })()
         );
-
-        // Return full debate state so clients don't need to re-fetch
-        return NextResponse.json({
-          success: true,
-          forfeited: true,
-          status: "forfeited",
-          phase: "ended",
-          winner,
-          forfeiting_side: side,
-          completed_at: now,
-        });
+        return NextResponse.json({ success: true, forfeited_by: side });
       }
 
       default:
