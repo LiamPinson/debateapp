@@ -59,14 +59,14 @@ export async function POST(request) {
           .update({ [readyField]: true })
           .eq("id", debateId)
           .eq("status", "prematch")
-          .select("pro_ready, con_ready")
+          .select("pro_ready, con_ready, status, phase, started_at")
           .maybeSingle();
 
         if (readyErr) {
           return NextResponse.json({ error: readyErr.message }, { status: 500 });
         }
 
-        // Debate was already started (prematch guard matched 0 rows) — return current state.
+        // Debate was already started (prematch guard matched 0 rows) — fetch current state.
         if (!readyResult) {
           const { data: current } = await db
             .from("debates")
@@ -82,18 +82,47 @@ export async function POST(request) {
 
         // Both sides ready → start the debate atomically.
         if (readyResult.pro_ready && readyResult.con_ready) {
+          const now = new Date().toISOString();
           const { data: started } = await db
             .from("debates")
             .update({
               status: "in_progress",
               phase: "opening_pro",
-              started_at: new Date().toISOString(),
+              started_at: now,
             })
             .eq("id", debateId)
             .eq("status", "prematch")
-            .select("status, phase, started_at, daily_room_name")
+            .select("status, phase, started_at, daily_room_name, daily_room_url")
             .maybeSingle();
 
+          // If update failed (debate already in_progress), fetch fresh state
+          if (!started) {
+            const { data: current } = await db
+              .from("debates")
+              .select("status, phase, started_at, daily_room_name, daily_room_url")
+              .eq("id", debateId)
+              .single();
+
+            if (current?.status === "in_progress") {
+              // Started by the other player — start recording if not already
+              if (current?.daily_room_name) {
+                startRecording(current.daily_room_name).catch((err) =>
+                  console.error("Recording start failed:", err)
+                );
+              }
+              return NextResponse.json({
+                success: true,
+                bothReady: true,
+                status: current.status,
+                phase: current.phase,
+                started_at: current.started_at,
+                daily_room_name: current.daily_room_name,
+                daily_room_url: current.daily_room_url,
+              });
+            }
+          }
+
+          // Update succeeded — we started it
           // Start recording (fire-and-forget).
           if (started?.daily_room_name) {
             startRecording(started.daily_room_name).catch((err) =>
@@ -106,9 +135,9 @@ export async function POST(request) {
             bothReady: true,
             status: started?.status || "in_progress",
             phase: started?.phase || "opening_pro",
-            started_at: started?.started_at || new Date().toISOString(),
-            pro_ready: true,
-            con_ready: true,
+            started_at: started?.started_at || now,
+            daily_room_name: started?.daily_room_name,
+            daily_room_url: started?.daily_room_url,
           });
         }
 
@@ -118,6 +147,7 @@ export async function POST(request) {
           bothReady: false,
           pro_ready: readyResult.pro_ready,
           con_ready: readyResult.con_ready,
+          status: readyResult.status,
         });
       }
 
