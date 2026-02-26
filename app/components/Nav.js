@@ -32,6 +32,9 @@ export default function Nav() {
             <Link href="/" className="text-sm text-arena-muted hover:text-arena-text transition-colors">
               Home
             </Link>
+            <Link href="/about" className="text-sm text-arena-muted hover:text-arena-text transition-colors">
+              About
+            </Link>
             <Link href="/topics" className="text-sm text-arena-muted hover:text-arena-text transition-colors">
               Topics
             </Link>
