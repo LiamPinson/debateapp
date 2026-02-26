@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/auth/reset-password/validate?token=xyz
  * → validate token exists and not expired

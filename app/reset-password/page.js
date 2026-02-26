@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 
 const SESSION_KEY = "debate_session_token";
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useSession();
@@ -58,7 +58,6 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     setError(null);
 
-    // Validate password match
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -75,10 +74,7 @@ export default function ResetPasswordPage() {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          password,
-        }),
+        body: JSON.stringify({ token, password }),
       });
 
       const data = await response.json();
@@ -89,7 +85,6 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // Auto-login: store session token and update context
       if (data.sessionToken) {
         localStorage.setItem(SESSION_KEY, data.sessionToken);
       }
@@ -99,7 +94,6 @@ export default function ResetPasswordPage() {
       setPassword("");
       setConfirmPassword("");
 
-      // Redirect to home after 2 seconds
       setTimeout(() => router.push("/"), 2000);
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -121,10 +115,7 @@ export default function ResetPasswordPage() {
         <div className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md">
           <h1 className="text-xl font-bold mb-4">Reset Password</h1>
           <p className="text-sm text-arena-con mb-4">{error}</p>
-          <a
-            href="/"
-            className="text-arena-accent hover:underline text-sm"
-          >
+          <a href="/" className="text-arena-accent hover:underline text-sm">
             ← Return home
           </a>
         </div>
@@ -168,9 +159,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
-              New Password
-            </label>
+            <label className="block text-sm font-medium mb-1">New Password</label>
             <input
               type="password"
               value={password}
@@ -180,15 +169,11 @@ export default function ResetPasswordPage() {
               className="w-full bg-arena-bg border border-arena-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-arena-accent disabled:opacity-50"
               placeholder="••••••••"
             />
-            <p className="text-xs text-arena-muted mt-1">
-              At least 8 characters
-            </p>
+            <p className="text-xs text-arena-muted mt-1">At least 8 characters</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Confirm Password
-            </label>
+            <label className="block text-sm font-medium mb-1">Confirm Password</label>
             <input
               type="password"
               value={confirmPassword}
@@ -200,9 +185,7 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-arena-con">{error}</p>
-          )}
+          {error && <p className="text-sm text-arena-con">{error}</p>}
 
           <div className="flex gap-3">
             <a
@@ -222,5 +205,19 @@ export default function ResetPasswordPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-arena-bg">
+          <p className="text-arena-muted">Loading...</p>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
