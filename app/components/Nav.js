@@ -46,6 +46,13 @@ export default function Nav() {
               <>
                 {user && <NotificationDropdown />}
 
+                <Link
+                  href="/about"
+                  className="hidden sm:inline-flex px-3 py-1.5 bg-arena-accent text-white text-sm rounded-lg font-medium hover:bg-arena-accent/80 transition-colors"
+                >
+                  About
+                </Link>
+
                 {isGuest ? (
                   <div className="flex items-center gap-3">
                     <span className="hidden sm:inline text-xs text-arena-muted">
