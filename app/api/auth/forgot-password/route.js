@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { randomBytes } from "crypto";
+import { Resend } from "resend";
 
 /**
  * POST /api/auth/forgot-password
@@ -60,10 +61,30 @@ export async function POST(request) {
     // Send email with reset link
     const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
 
-    // TODO: Implement email sending (Supabase, SendGrid, Resend, etc.)
-    // For now, log to console in development
     if (process.env.NODE_ENV === "development") {
       console.log(`[DEV] Reset link for ${email}: ${resetLink}`);
+    } else {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: "Debate Arena <onboarding@resend.dev>",
+        to: email,
+        subject: "Reset your password",
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+            <h2 style="margin-bottom:8px">Reset your password</h2>
+            <p style="color:#666;margin-bottom:24px">
+              Click the link below to set a new password. This link expires in 1 hour.
+            </p>
+            <a href="${resetLink}"
+               style="display:inline-block;background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">
+              Reset Password
+            </a>
+            <p style="color:#999;font-size:12px;margin-top:24px">
+              If you didn't request this, you can safely ignore this email.
+            </p>
+          </div>
+        `,
+      });
     }
 
     return NextResponse.json({
