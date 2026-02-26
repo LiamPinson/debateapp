@@ -21,16 +21,11 @@ export default function Nav() {
     <>
       <nav className="fixed top-0 left-0 right-0 z-40 bg-arena-bg/90 backdrop-blur-md border-b border-arena-border">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Left: Logo and About */}
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-              <span className="text-arena-accent">Arena</span>
-              <span className="text-arena-muted">.gg</span>
-            </Link>
-            <Link href="/about" className="text-sm text-arena-muted hover:text-arena-text transition-colors">
-              About
-            </Link>
-          </div>
+          {/* Left: Logo */}
+          <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+            <span className="text-arena-accent">Arena</span>
+            <span className="text-arena-muted">.gg</span>
+          </Link>
 
           {/* Center: Nav links */}
           <div className="hidden sm:flex items-center gap-6">
