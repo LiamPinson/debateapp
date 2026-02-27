@@ -40,6 +40,7 @@ CREATE TABLE users (
   quality_score_avg NUMERIC(5,2) DEFAULT 50.00,
   strike_count INTEGER DEFAULT 0,
   rank_tier TEXT DEFAULT 'Bronze',
+  is_admin BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_active TIMESTAMPTZ DEFAULT NOW()
 );
@@ -47,6 +48,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_auth_id ON users(auth_id);
 CREATE INDEX idx_users_quality_score ON users(quality_score_avg DESC);
+CREATE INDEX idx_users_is_admin ON users(is_admin) WHERE is_admin = TRUE;
 
 -- ============================================================
 -- 3. TOPICS

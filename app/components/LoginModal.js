@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { loginWithPassword } from "@/lib/api-client";
 import { createOAuthClient } from "@/lib/supabase";
@@ -20,6 +21,7 @@ function GoogleIcon() {
 }
 
 export default function LoginModal({ open, onClose }) {
+  const router = useRouter();
   const { login } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +62,13 @@ export default function LoginModal({ open, onClose }) {
         }
         login(result.user);
         handleClose();
+
+        // Redirect based on admin status
+        if (result.user?.isAdmin) {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/");
+        }
       }
     } catch (err) {
       setError(err.message);

@@ -27,7 +27,7 @@ export async function POST(request) {
     // Look up user record
     const { data: user, error: userError } = await db
       .from("users")
-      .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates")
+      .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates, is_admin")
       .eq("email", email)
       .single();
 
@@ -51,6 +51,7 @@ export async function POST(request) {
         wins: user.wins,
         losses: user.losses,
         draws: user.draws,
+        isAdmin: user.is_admin || false,
       },
       sessionToken,
     });
