@@ -56,6 +56,16 @@ export default function LoginModal({ open, onClose }) {
     if (oauthError) setError(oauthError.message);
   };
 
+  const handleX = async () => {
+    setError(null);
+    const supabase = createOAuthClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "twitter",
+      options: { redirectTo: window.location.origin + "/auth/callback" },
+    });
+    if (oauthError) setError(oauthError.message);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -97,6 +107,13 @@ export default function LoginModal({ open, onClose }) {
             className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
           >
             <GoogleIcon /> Continue with Google
+          </button>
+
+          <button
+            onClick={handleX}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors text-white"
+          >
+            <XIcon /> Continue with X
           </button>
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
