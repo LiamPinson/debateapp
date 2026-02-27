@@ -86,10 +86,15 @@ export async function POST(request, { params }) {
     }
 
     // 5. Update the topic to rejected status
+    // Note: The schema only supports approval tracking (approved_at, approved_by_user_id).
+    // Rejection tracking is not supported - rejections are not audited.
+    // To add rejection tracking, the schema would need rejected_at and rejected_by_user_id columns,
+    // and the approval_consistency constraint would need to be updated.
     const { data: updated, error: updateError } = await db
       .from('custom_topics')
       .update({
         status: 'rejected'
+        // Schema constraint requires approved fields to be NULL when rejected
       })
       .eq('id', id)
       .select()
