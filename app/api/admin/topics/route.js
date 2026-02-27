@@ -70,7 +70,7 @@ export async function GET(request) {
     if (userError || !user) {
       return NextResponse.json(
         { error: 'User not found' },
-        { status: 401 }
+        { status: 404 }
       );
     }
 
@@ -94,8 +94,8 @@ export async function GET(request) {
       throw new Error(`Failed to fetch topics count: ${countError.message}`);
     }
 
-    // 7. Fetch topics with pagination
-    const { data: topics, error: topicsError } = await db
+    // 7. Fetch topics with user data in a single query using joins
+    const { data: topicsWithUsers, error: topicsError } = await db
       .from('custom_topics')
       .select(`
         id,
@@ -105,7 +105,8 @@ export async function GET(request) {
         created_at,
         approved_at,
         approved_by_user_id,
-        user_id
+        user_id,
+        users!user_id(username, email)
       `)
       .eq('status', status)
       .order('created_at', { ascending: false })
@@ -115,31 +116,28 @@ export async function GET(request) {
       throw new Error(`Failed to fetch topics: ${topicsError.message}`);
     }
 
-    // 8. Fetch user info for each topic
-    const topicsWithUsers = await Promise.all(
-      (topics || []).map(async (topic) => {
-        const { data: submittedByUser } = await db
-          .from('users')
-          .select('username, email')
-          .eq('id', topic.user_id)
-          .single();
-
-        return {
-          ...topic,
-          submitted_by: {
-            username: submittedByUser?.username || 'Unknown',
-            email: submittedByUser?.email || 'Unknown'
-          }
-        };
-      })
-    );
+    // 8. Transform response to match expected format
+    const formattedTopics = (topicsWithUsers || []).map(topic => ({
+      id: topic.id,
+      headline: topic.headline,
+      description: topic.description,
+      status: topic.status,
+      created_at: topic.created_at,
+      approved_at: topic.approved_at,
+      approved_by_user_id: topic.approved_by_user_id,
+      user_id: topic.user_id,
+      submitted_by: {
+        username: topic.users?.username || 'Unknown',
+        email: topic.users?.email || 'Unknown'
+      }
+    }));
 
     // 9. Calculate total pages
     const totalPages = Math.ceil((totalCount || 0) / limit);
 
-    // 10. Return response with topics and pagination metadata
+    // 9. Return response with topics and pagination metadata
     return NextResponse.json({
-      topics: topicsWithUsers,
+      topics: formattedTopics,
       pagination: {
         page,
         limit,
