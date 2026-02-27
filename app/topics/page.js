@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useSession } from '@/lib/SessionContext';
 import TopicsFilter from "./TopicsFilter";
 import { CustomTopicModal } from '@/components/CustomTopicModal';
 
@@ -9,52 +9,19 @@ export default function TopicsPage() {
   const [topics, setTopics] = useState([]);
   const [customTopics, setCustomTopics] = useState([]);
   const [customTopicModalOpen, setCustomTopicModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const { data: session } = useSession();
+  const { user } = useSession();
 
   useEffect(() => {
-    const fetchTopics = async () => {
-      try {
-        // Fetch official topics
-        const response = await fetch('/api/topics');
-        const data = await response.json();
-        setTopics(data.topics || []);
-      } catch (err) {
-        console.error('Failed to fetch topics:', err);
-      }
-    };
+    fetch('/api/topics')
+      .then(r => r.json())
+      .then(data => setTopics(data.topics || []))
+      .catch(err => console.error('Failed to fetch topics:', err));
 
-    fetchTopics();
+    fetch('/api/custom-topics/approved')
+      .then(r => r.json())
+      .then(data => setCustomTopics(data.topics || []))
+      .catch(err => console.error('Failed to refresh custom topics:', err));
   }, []);
-
-  useEffect(() => {
-    const fetchCustomTopics = async () => {
-      try {
-        const response = await fetch('/api/custom-topics/approved');
-        const data = await response.json();
-        setCustomTopics(data.topics || []);
-      } catch (err) {
-        console.error('Failed to fetch custom topics:', err);
-      }
-    };
-
-    fetchCustomTopics();
-  }, []);
-
-  useEffect(() => {
-    setLoading(false);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Topics</h1>
-        <div className="text-center py-12">
-          <p className="text-gray-500">Loading topics...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -67,7 +34,10 @@ export default function TopicsPage() {
         + Create Custom Topic
       </button>
 
-      <TopicsFilter topics={topics} />
+      <div className="mb-4">
+        <h2 className="text-xl font-bold mb-4">House Select Topics</h2>
+        <TopicsFilter topics={topics} />
+      </div>
 
       {customTopics.length > 0 && (
         <div className="mt-12 mb-8">
@@ -93,9 +63,9 @@ export default function TopicsPage() {
           fetch('/api/custom-topics/approved')
             .then(r => r.json())
             .then(data => setCustomTopics(data.topics || []))
-            .catch(err => console.error('Failed to refresh topics:', err));
+            .catch(err => console.error('Failed to refresh custom topics:', err));
         }}
-        isSignedIn={!!session?.user}
+        isSignedIn={!!user}
       />
     </div>
   );
