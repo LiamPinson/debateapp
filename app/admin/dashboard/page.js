@@ -7,7 +7,7 @@ import Link from "next/link";
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user, loading } = useSession();
+  const { user, loading, logout } = useSession();
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,7 +27,8 @@ export default function AdminDashboard() {
         setStatsLoading(true);
         setError(null);
 
-        const response = await fetch(`/api/admin/stats?userId=${user.id}`);
+        const params = new URLSearchParams({ userId: user.id });
+        const response = await fetch(`/api/admin/stats?${params}`);
 
         if (!response.ok) {
           const data = await response.json();
@@ -56,7 +57,11 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
+        <div
+          className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin"
+          role="status"
+          aria-label="Loading admin dashboard..."
+        />
       </div>
     );
   }
@@ -87,9 +92,8 @@ export default function AdminDashboard() {
               </Link>
               <button
                 onClick={() => {
-                  // Logout functionality - clear session
-                  localStorage.removeItem("debate_session_token");
-                  router.push("/");
+                  // Logout functionality - use SessionContext's logout method
+                  logout();
                 }}
                 className="px-4 py-2 bg-arena-accent text-white rounded-lg text-sm font-medium hover:bg-arena-accent/80 transition-colors"
               >
@@ -110,7 +114,11 @@ export default function AdminDashboard() {
 
         {statsLoading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin" />
+            <div
+              className="w-10 h-10 border-4 border-arena-accent border-t-transparent rounded-full animate-spin"
+              role="status"
+              aria-label="Loading stats..."
+            />
           </div>
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -123,7 +131,7 @@ export default function AdminDashboard() {
                     {stats.totalDebates}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-accent/10 text-arena-accent rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-arena-accent/10 text-arena-accent rounded-full flex items-center justify-center" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -152,7 +160,7 @@ export default function AdminDashboard() {
                     {stats.totalUsers}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-pro/10 text-arena-pro rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-arena-pro/10 text-arena-pro rounded-full flex items-center justify-center" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -181,7 +189,7 @@ export default function AdminDashboard() {
                     {stats.pendingTopics}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-con/10 text-arena-con rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-arena-con/10 text-arena-con rounded-full flex items-center justify-center" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
