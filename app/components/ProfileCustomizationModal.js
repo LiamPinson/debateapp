@@ -61,6 +61,9 @@ export default function ProfileCustomizationModal({ open, oauthData, onClose }) 
 
       const response = await fetch("/api/auth/oauth-profile-complete", {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${oauthData.access_token}`,
+        },
         body: formData,
       });
 

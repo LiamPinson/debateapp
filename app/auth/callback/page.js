@@ -48,6 +48,7 @@ export default function AuthCallbackPage() {
           setOauthData({
             user_name: data.session.user?.user_metadata?.user_name,
             avatar_url: data.session.user?.user_metadata?.avatar_url,
+            access_token: data.session.access_token,
           });
           setShowProfileModal(true);
         } else {
