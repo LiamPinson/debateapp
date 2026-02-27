@@ -40,7 +40,7 @@ export async function POST(request) {
     // Get topic
     const { data: topic, error: selectError } = await db
       .from('custom_topics')
-      .select('id, headline, user_id')
+      .select('id, headline, user_id, status')
       .eq('id', topicId)
       .single();
 
@@ -64,7 +64,9 @@ export async function POST(request) {
       .update({
         status: 'approved',
         approved_at: new Date().toISOString(),
-        approved_by_user_id: null, // Optional: could store owner user ID if needed
+        // Note: approved_by_user_id is intentionally not updated here
+        // This endpoint is called from unauthenticated email link (no admin context)
+        // Constraint allows null approved_by_user_id for system-approved topics
       })
       .eq('id', topicId);
 
