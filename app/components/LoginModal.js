@@ -20,6 +20,14 @@ function GoogleIcon() {
   );
 }
 
+function XIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.6l-5.165-6.75-5.913 6.75h-3.308l7.73-8.835L.424 2.25h6.7l4.759 6.236L17.464 2.25zm-1.161 17.52h1.833L7.084 5.126H5.117z"/>
+    </svg>
+  );
+}
+
 export default function LoginModal({ open, onClose }) {
   const router = useRouter();
   const { login } = useSession();
@@ -43,6 +51,16 @@ export default function LoginModal({ open, onClose }) {
     const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
+      options: { redirectTo: window.location.origin + "/auth/callback" },
+    });
+    if (oauthError) setError(oauthError.message);
+  };
+
+  const handleX = async () => {
+    setError(null);
+    const supabase = createOAuthClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "twitter",
       options: { redirectTo: window.location.origin + "/auth/callback" },
     });
     if (oauthError) setError(oauthError.message);
@@ -89,6 +107,13 @@ export default function LoginModal({ open, onClose }) {
             className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
           >
             <GoogleIcon /> Continue with Google
+          </button>
+
+          <button
+            onClick={handleX}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors text-white"
+          >
+            <XIcon /> Continue with X
           </button>
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
