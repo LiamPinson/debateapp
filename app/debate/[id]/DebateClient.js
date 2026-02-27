@@ -843,8 +843,21 @@ export default function DebateClient({ initialDebate, params }) {
                 ? "bg-arena-con/20 text-arena-con border border-arena-con"
                 : "bg-arena-surface border border-arena-border hover:bg-arena-border/30"
             }`}
+            title="Toggle your microphone (send audio)"
           >
             {daily.localMuted ? "Unmute" : "Mute"}
+          </button>
+
+          <button
+            onClick={daily.toggleRemoteMute}
+            className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              daily.remoteMuted
+                ? "bg-arena-accent/20 text-arena-accent border border-arena-accent"
+                : "bg-arena-surface border border-arena-border hover:bg-arena-border/30"
+            }`}
+            title="Toggle speaker (receive audio from opponent)"
+          >
+            {daily.remoteMuted ? "Unmute Speaker" : "Mute Speaker"}
           </button>
 
           {!forfeitConfirm ? (
