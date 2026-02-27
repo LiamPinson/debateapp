@@ -1,6 +1,6 @@
 -- Create custom_topics table
 CREATE TABLE IF NOT EXISTS custom_topics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   headline TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -10,15 +10,19 @@ CREATE TABLE IF NOT EXISTS custom_topics (
     CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   approved_at TIMESTAMPTZ,
-  approved_by_email TEXT,
+  approved_by_user_id UUID REFERENCES auth.users(id),
   CONSTRAINT headline_word_count CHECK (
-    array_length(string_to_array(trim(headline), ' '), 1) <= 20
+    array_length(regexp_split_to_array(trim(headline), '\s+'), 1) <= 20
   ),
   CONSTRAINT description_word_count CHECK (
     array_length(string_to_array(trim(description), ' '), 1) <= 150
   ),
   CONSTRAINT non_empty_headline CHECK (trim(headline) != ''),
-  CONSTRAINT non_empty_description CHECK (trim(description) != '')
+  CONSTRAINT non_empty_description CHECK (trim(description) != ''),
+  CONSTRAINT approval_consistency CHECK (
+    (status = 'approved' AND approved_at IS NOT NULL AND approved_by_user_id IS NOT NULL) OR
+    (status IN ('pending', 'rejected') AND approved_at IS NULL AND approved_by_user_id IS NULL)
+  )
 );
 
 -- Create indexes for common queries
@@ -26,6 +30,8 @@ CREATE INDEX idx_custom_topics_user_id ON custom_topics(user_id);
 CREATE INDEX idx_custom_topics_status ON custom_topics(status);
 CREATE INDEX idx_custom_topics_status_created ON custom_topics(status, created_at DESC);
 CREATE INDEX idx_custom_topics_user_created ON custom_topics(user_id, created_at DESC);
+CREATE INDEX idx_custom_topics_user_status_created ON custom_topics(user_id, status, created_at DESC);
+CREATE INDEX idx_custom_topics_approved_at ON custom_topics(approved_at DESC) WHERE status = 'approved';
 
 -- Enable RLS
 ALTER TABLE custom_topics ENABLE ROW LEVEL SECURITY;
@@ -42,8 +48,18 @@ CREATE POLICY "users_create_topics" ON custom_topics
     auth.uid()::text = user_id::text
   );
 
--- RLS Policy: Only service role can update (for approval)
--- (This will be handled via service client in API routes)
+-- RLS Policy: Allow users to update their own pending topics
+CREATE POLICY "users_update_own_pending" ON custom_topics
+  FOR UPDATE USING (
+    auth.uid()::text = user_id::text AND status = 'pending'
+  )
+  WITH CHECK (auth.uid()::text = user_id::text);
+
+-- RLS Policy: Allow users to delete their own pending topics
+CREATE POLICY "users_delete_own_pending" ON custom_topics
+  FOR DELETE USING (
+    auth.uid()::text = user_id::text AND status = 'pending'
+  );
 
 -- Add custom_topic_id to debates table to link debates to custom topics
 ALTER TABLE IF EXISTS debates
