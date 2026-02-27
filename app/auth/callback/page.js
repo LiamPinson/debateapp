@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createOAuthClient } from "@/lib/supabase";
 import { loginWithOAuth } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
+import ProfileCustomizationModal from "@/app/components/ProfileCustomizationModal";
 
 const SESSION_KEY = "debate_session_token";
 
@@ -12,6 +13,8 @@ export default function AuthCallbackPage() {
   const router = useRouter();
   const { login } = useSession();
   const [error, setError] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [oauthData, setOauthData] = useState(null);
 
   useEffect(() => {
     async function handleCallback() {
@@ -39,7 +42,17 @@ export default function AuthCallbackPage() {
 
         localStorage.setItem(SESSION_KEY, result.sessionToken);
         login(result.user);
-        router.push("/");
+
+        // Check if new user - if so, show profile customization modal
+        if (result.isNewUser) {
+          setOauthData({
+            user_name: data.session.user?.user_metadata?.user_name,
+            avatar_url: data.session.user?.user_metadata?.avatar_url,
+          });
+          setShowProfileModal(true);
+        } else {
+          router.push("/");
+        }
       } catch (err) {
         setError(err.message);
       }
@@ -47,6 +60,19 @@ export default function AuthCallbackPage() {
 
     handleCallback();
   }, []);
+
+  if (showProfileModal && oauthData) {
+    return (
+      <ProfileCustomizationModal
+        open={true}
+        oauthData={oauthData}
+        onClose={() => {
+          setShowProfileModal(false);
+          router.push("/");
+        }}
+      />
+    );
+  }
 
   if (error) {
     return (
