@@ -50,7 +50,7 @@ export default function RegisterModal({ open, onClose }) {
     setError(null);
     const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "twitter",
+      provider: "x",
       options: { redirectTo: window.location.origin + "/auth/callback" },
     });
     if (oauthError) setError(oauthError.message);
