@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
  * Returns activity stats for a specific user
  * Requires authenticated admin user
  *
- * Query: { adminUserId }
+ * Query: { userId }
  *
  * Returns: {
  *   user: { id, username, email, created_at },
@@ -19,11 +19,11 @@ export async function GET(request, { params }) {
   try {
     const { userId } = params;
     const { searchParams } = new URL(request.url);
-    const adminUserId = searchParams.get('adminUserId');
+    const adminId = searchParams.get('userId');
 
-    if (!adminUserId) {
+    if (!adminId) {
       return NextResponse.json(
-        { error: 'adminUserId required' },
+        { error: 'userId required' },
         { status: 400 }
       );
     }
@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
     const { data: admin, error: adminError } = await db
       .from('users')
       .select('id, is_admin')
-      .eq('id', adminUserId)
+      .eq('id', adminId)
       .single();
 
     if (adminError || !admin) {
