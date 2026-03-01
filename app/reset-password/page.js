@@ -4,8 +4,6 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 
-const SESSION_KEY = "debate_session_token";
-
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -74,6 +72,7 @@ function ResetPasswordContent() {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ token, password }),
       });
 
@@ -85,9 +84,7 @@ function ResetPasswordContent() {
         return;
       }
 
-      if (data.sessionToken) {
-        localStorage.setItem(SESSION_KEY, data.sessionToken);
-      }
+      // Session cookie is set automatically by the server response
       login(data.user);
 
       setSuccess(true);

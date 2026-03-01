@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { enterQueue, leaveQueue } from "@/lib/matchmaking";
 import { createServiceClient } from "@/lib/supabase";
+import { QueueSchema, LeaveQueueSchema, validate } from "@/lib/schemas";
 
 /**
  * GET /api/matchmaking/queue?queueId=xxx
@@ -41,16 +42,10 @@ export async function GET(request) {
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, QueueSchema);
+    if (validationError) return validationError;
+
     const { userId, sessionId, category, topicId, timeLimit, stance, ranked } = body;
-
-    if (!userId && !sessionId) {
-      return NextResponse.json({ error: "Either userId or sessionId is required" }, { status: 400 });
-    }
-
-    if (!category || !timeLimit) {
-      return NextResponse.json({ error: "category and timeLimit are required" }, { status: 400 });
-    }
 
     // Validate unregistered user debate limit
     if (!userId && sessionId) {
@@ -102,14 +97,10 @@ export async function POST(request) {
  */
 export async function DELETE(request) {
   try {
-    const body = await request.json();
-    const { queueId } = body;
+    const { data: body, error: validationError } = await validate(request, LeaveQueueSchema);
+    if (validationError) return validationError;
 
-    if (!queueId) {
-      return NextResponse.json({ error: "queueId required" }, { status: 400 });
-    }
-
-    await leaveQueue(queueId);
+    await leaveQueue(body.queueId);
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

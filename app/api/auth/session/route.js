@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { setSessionCookie } from "@/lib/auth";
 import { randomBytes, createHash } from "crypto";
 
 /**
@@ -8,12 +9,13 @@ import { randomBytes, createHash } from "crypto";
  * Uses a browser fingerprint (UA + Accept-Language + IP hash) to
  * prevent trivial session farming via localStorage clearing.
  *
- * Body: { token? }
+ * Reads existing token from: HttpOnly cookie (preferred) or body { token } (legacy).
  */
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { token } = body;
+    // Prefer HttpOnly cookie; fall back to body token (legacy localStorage clients)
+    const token = request.cookies.get("debate_session")?.value || body.token;
     const db = createServiceClient();
     const fingerprint = buildFingerprint(request);
 
@@ -44,19 +46,20 @@ export async function POST(request) {
             .eq("id", session.id);
         }
 
-        return NextResponse.json({
+        // Re-set the cookie to refresh its maxAge
+        const res = NextResponse.json({
           session_id: session.id,
           debate_count: session.debate_count,
           strike_count: session.strike_count,
           debates_remaining: Math.max(0, 5 - session.debate_count),
         });
+        return setSessionCookie(res, token);
       }
       // Token not found — fall through to fingerprint check / new session
     }
 
     // Check if a session already exists for this fingerprint.
-    // This catches users who clear localStorage to bypass the 5-debate limit.
-    // Wrapped in try/catch — if the fingerprint column doesn't exist, skip gracefully.
+    // This catches users who clear localStorage/cookies to bypass the 5-debate limit.
     if (fingerprint) {
       try {
         const { data: fingerprintSession } = await db
@@ -79,14 +82,14 @@ export async function POST(request) {
             })
             .eq("id", fingerprintSession.id);
 
-          return NextResponse.json({
-            token: newToken,
+          const res = NextResponse.json({
             session_id: fingerprintSession.id,
             debate_count: fingerprintSession.debate_count,
             strike_count: fingerprintSession.strike_count,
             debates_remaining: Math.max(0, 5 - fingerprintSession.debate_count),
             reattached: true,
           });
+          return setSessionCookie(res, newToken);
         }
       } catch {
         // fingerprint column likely doesn't exist — skip reattachment
@@ -120,13 +123,13 @@ export async function POST(request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({
-      token: newToken,
+    const res = NextResponse.json({
       session_id: session.id,
       debate_count: 0,
       strike_count: 0,
       debates_remaining: 5,
     });
+    return setSessionCookie(res, newToken);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -134,13 +137,10 @@ export async function POST(request) {
 
 /**
  * Build a browser fingerprint from request headers.
- * Combines User-Agent, Accept-Language, and client IP into a stable hash.
- * Not perfect (VPN/incognito can bypass) but raises the bar significantly.
  */
 function buildFingerprint(request) {
   const ua = request.headers.get("user-agent") || "";
   const lang = request.headers.get("accept-language") || "";
-  // x-forwarded-for is set by Vercel/reverse proxies
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
     || request.headers.get("x-real-ip")
     || "";

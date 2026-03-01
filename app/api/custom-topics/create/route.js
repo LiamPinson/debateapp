@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase';
 import { sendTopicSubmissionEmail } from '@/lib/email';
 import { createApprovalToken, createRejectionToken } from '@/lib/tokens';
+import { CreateCustomTopicSchema, validate } from '@/lib/schemas';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,49 +20,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, CreateCustomTopicSchema);
+    if (validationError) return validationError;
+
     const { headline, description, notificationPreference } = body;
-
-    // Validate inputs
-    if (!headline || !description || !notificationPreference) {
-      return NextResponse.json(
-        { error: 'headline, description, and notificationPreference required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate headline word count
-    const headlineWords = headline.trim().split(/\s+/).length;
-    if (headlineWords > 20) {
-      return NextResponse.json(
-        { error: `Headline must be 20 words or fewer (${headlineWords} provided)` },
-        { status: 400 }
-      );
-    }
-
-    if (headlineWords === 0) {
-      return NextResponse.json(
-        { error: 'Headline cannot be empty' },
-        { status: 400 }
-      );
-    }
-
-    // Validate description word count
-    const descriptionWords = description.trim().split(/\s+/).length;
-    if (descriptionWords > 150) {
-      return NextResponse.json(
-        { error: `Description must be 150 words or fewer (${descriptionWords} provided)` },
-        { status: 400 }
-      );
-    }
-
-    // Validate notification preference
-    if (!['email', 'in_app', 'both'].includes(notificationPreference)) {
-      return NextResponse.json(
-        { error: 'Invalid notification preference' },
-        { status: 400 }
-      );
-    }
 
     const db = createServiceClient();
 

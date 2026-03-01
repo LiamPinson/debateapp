@@ -1,31 +1,31 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { setSessionCookie } from "@/lib/auth";
+import { randomBytes, createHash } from "crypto";
+import { checkRateLimit, getClientIP } from "@/lib/rate-limit";
+import { RegisterSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/auth/register
  * Register a new user. Migrates session data if transitioning from guest.
  *
- * Body: { username, email, sessionId? }
+ * Body: { username, email, password, sessionId? }
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, RegisterSchema);
+    if (validationError) return validationError;
+
     const { username, email, password, sessionId } = body;
 
-    if (!username || !email || !password) {
-      return NextResponse.json({ error: "username, email, and password required" }, { status: 400 });
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
-    }
-
-    // Validate username
-    if (username.length < 3 || username.length > 24) {
-      return NextResponse.json({ error: "Username must be 3-24 characters" }, { status: 400 });
-    }
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      return NextResponse.json({ error: "Username can only contain letters, numbers, and underscores" }, { status: 400 });
+    // Rate limit: 3 registrations per IP per hour
+    const ip = getClientIP(request);
+    const allowed = await checkRateLimit(`register_ip:${ip}`, 3600, 3);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many registration attempts. Please try again later." },
+        { status: 429 }
+      );
     }
 
     const db = createServiceClient();
@@ -93,6 +93,15 @@ export async function POST(request) {
       return NextResponse.json({ error: userError.message }, { status: 500 });
     }
 
+    // Link the existing session to the new user so the server can
+    // resolve caller identity from the session token.
+    if (sessionId) {
+      await db
+        .from("sessions")
+        .update({ user_id: user.id })
+        .eq("id", sessionId);
+    }
+
     // Migrate debate ownership from session to user
     if (sessionId) {
       await db
@@ -112,7 +121,13 @@ export async function POST(request) {
         .eq("session_id", sessionId);
     }
 
-    return NextResponse.json({
+    // Create a session token so the newly registered user is immediately
+    // authenticated via HttpOnly cookie (no localStorage round-trip).
+    const sessionToken = randomBytes(32).toString("hex");
+    const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
+    await db.from("sessions").insert({ token_hash: tokenHash, user_id: user.id });
+
+    const res = NextResponse.json({
       user: {
         id: user.id,
         username: user.username,
@@ -125,6 +140,7 @@ export async function POST(request) {
       },
       auth_id: authData.user.id,
     });
+    return setSessionCookie(res, sessionToken);
   } catch (err) {
     console.error("Registration error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

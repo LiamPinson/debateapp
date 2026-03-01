@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
+import { log } from "@/lib/logger";
 import { enterQueue, leaveQueue } from "@/lib/api-client";
 import { useRealtimeMatch, useMatchPolling } from "@/lib/useRealtime";
 
@@ -69,7 +70,7 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
         stance,
         ranked: ranked && !isGuest,
       });
-      console.log("QUEUE RESPONSE:", JSON.stringify(result));
+      log.debug("QUEUE RESPONSE:", JSON.stringify(result));
       if (result.error) {
         setError(result.error);
         setSearching(false);
@@ -103,14 +104,30 @@ export default function MatchmakingModal({ open, onClose, topic = null }) {
     setElapsed(0);
   };
 
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (e.key === "Escape") handleCancel();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, handleCancel]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleCancel}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Find a debate"
+        className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         {searching ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 border-4 border-arena-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <div role="status" aria-label="Searching for opponent" className="w-16 h-16 border-4 border-arena-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
             <h3 className="text-lg font-bold mb-1">Finding Opponent...</h3>
             <p className="text-arena-muted text-sm mb-4">
               {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")} elapsed

@@ -6,8 +6,6 @@ import { createOAuthClient } from "@/lib/supabase";
 import { loginWithOAuth } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
 
-const SESSION_KEY = "debate_session_token";
-
 export default function AuthCallbackPage() {
   const router = useRouter();
   const { login } = useSession();
@@ -37,7 +35,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        localStorage.setItem(SESSION_KEY, result.sessionToken);
+        // Session cookie is set automatically by the server response
         login(result.user);
         router.push("/");
       } catch (err) {
