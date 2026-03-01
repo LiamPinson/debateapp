@@ -27,6 +27,13 @@ export async function GET(request) {
       );
     }
 
+    if (page < 1 || limit < 1 || limit > 1000) {
+      return NextResponse.json(
+        { error: 'Invalid pagination parameters. Page must be >= 1, limit must be between 1-1000' },
+        { status: 400 }
+      );
+    }
+
     const db = createServiceClient();
 
     // Check admin status
