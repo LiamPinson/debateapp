@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getDebateSSR } from "@/lib/queries/getDebateSSR";
+import { log } from "@/lib/logger";
 import DebateClient from "./DebateClient";
+import { DebateErrorBoundary } from "@/app/components/ErrorBoundary";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +71,7 @@ export default async function DebatePage({ params }) {
     throw err; // re-throw so Next.js shows a 500 instead of silently 404ing
   }
 
-  console.log("DEBATE PAGE: debateId =", debateId, "found =", !!debate);
+  log.debug("DEBATE PAGE: debateId =", debateId, "found =", !!debate);
 
   if (!debate) {
     notFound();
@@ -87,5 +89,9 @@ export default async function DebatePage({ params }) {
     con_rank_tier: debate.con_rank_tier || debate.con_user?.rank_tier || null,
   };
 
-  return <DebateClient initialDebate={flatDebate} params={params} />;
+  return (
+    <DebateErrorBoundary>
+      <DebateClient initialDebate={flatDebate} params={params} />
+    </DebateErrorBoundary>
+  );
 }

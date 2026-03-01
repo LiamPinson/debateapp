@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
+import { ForgotPasswordSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/auth/forgot-password
@@ -11,15 +12,10 @@ import { Resend } from "resend";
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { email } = body;
+    const { data: body, error: validationError } = await validate(request, ForgotPasswordSchema);
+    if (validationError) return validationError;
 
-    if (!email) {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
-      );
-    }
+    const { email } = body;
 
     const db = createServiceClient();
 

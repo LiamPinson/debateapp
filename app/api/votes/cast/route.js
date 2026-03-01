@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { CastVoteSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/votes/cast
@@ -9,19 +10,10 @@ import { createServiceClient } from "@/lib/supabase";
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, CastVoteSchema);
+    if (validationError) return validationError;
+
     const { debateId, voterId, winnerChoice, betterArguments, moreRespectful, changedMind } = body;
-
-    if (!debateId || !voterId || !winnerChoice) {
-      return NextResponse.json(
-        { error: "debateId, voterId, and winnerChoice required" },
-        { status: 400 }
-      );
-    }
-
-    if (!["pro", "con", "draw"].includes(winnerChoice)) {
-      return NextResponse.json({ error: "winnerChoice must be pro, con, or draw" }, { status: 400 });
-    }
 
     const db = createServiceClient();
 
@@ -137,23 +129,15 @@ export async function GET(request) {
 
 async function updateWinLoss(db, debate, winner) {
   if (winner === "draw") {
-    // Both get draws
     for (const uid of [debate.pro_user_id, debate.con_user_id]) {
       if (!uid) continue;
-      const { data } = await db.from("users").select("draws").eq("id", uid).single();
-      if (data) await db.from("users").update({ draws: data.draws + 1 }).eq("id", uid);
+      await db.rpc("increment_draws", { user_uuid: uid });
     }
   } else {
     const winnerId = winner === "pro" ? debate.pro_user_id : debate.con_user_id;
     const loserId = winner === "pro" ? debate.con_user_id : debate.pro_user_id;
 
-    if (winnerId) {
-      const { data } = await db.from("users").select("wins").eq("id", winnerId).single();
-      if (data) await db.from("users").update({ wins: data.wins + 1 }).eq("id", winnerId);
-    }
-    if (loserId) {
-      const { data } = await db.from("users").select("losses").eq("id", loserId).single();
-      if (data) await db.from("users").update({ losses: data.losses + 1 }).eq("id", loserId);
-    }
+    if (winnerId) await db.rpc("increment_wins", { user_uuid: winnerId });
+    if (loserId) await db.rpc("increment_losses", { user_uuid: loserId });
   }
 }

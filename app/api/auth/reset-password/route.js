@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { setSessionCookie } from "@/lib/auth";
 import { randomBytes, createHash } from "crypto";
+import { ResetPasswordSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/auth/reset-password
@@ -9,27 +11,14 @@ import { randomBytes, createHash } from "crypto";
  * → update password in Supabase auth
  * → delete token
  * → create session token
- * → return { user, sessionToken }
+ * → return { user } + HttpOnly cookie
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, ResetPasswordSchema);
+    if (validationError) return validationError;
+
     const { token, password } = body;
-
-    // Validate inputs
-    if (!token || !password) {
-      return NextResponse.json(
-        { error: "Token and password are required" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters" },
-        { status: 400 }
-      );
-    }
 
     const db = createServiceClient();
 
@@ -91,9 +80,9 @@ export async function POST(request) {
     const sessionToken = randomBytes(32).toString("hex");
     const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
 
-    await db.from("sessions").insert({ token_hash: tokenHash });
+    await db.from("sessions").insert({ token_hash: tokenHash, user_id: user.id });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       user: {
         id: user.id,
         username: user.username,
@@ -105,8 +94,8 @@ export async function POST(request) {
         losses: user.losses,
         draws: user.draws,
       },
-      sessionToken,
     });
+    return setSessionCookie(res, sessionToken);
   } catch (err) {
     console.error("Reset password error:", err);
     return NextResponse.json(

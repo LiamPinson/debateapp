@@ -1,6 +1,13 @@
 import "./globals.css";
+import { Ruluko } from "next/font/google";
 import { Providers } from "./providers";
 import Nav from "./components/Nav";
+
+const ruluko = Ruluko({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata = {
   title: "Arena.gg — Debate Anyone",
@@ -9,12 +16,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Ruluko&display=swap" rel="stylesheet" />
-      </head>
+    <html lang="en" className={ruluko.className}>
       <body className="min-h-screen bg-arena-bg text-arena-text antialiased">
         <Providers>
           <Nav />

@@ -3,30 +3,29 @@
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/lib/SessionContext";
 import { useRealtimeNotifications } from "@/lib/useRealtime";
-import { getNotifications, markAllNotificationsRead } from "@/lib/api-client";
+import { useNotifications, useMarkAllRead } from "@/lib/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/hooks";
 
 export default function NotificationDropdown() {
   const { user } = useSession();
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const ref = useRef(null);
+  const queryClient = useQueryClient();
 
-  // Load notifications
-  useEffect(() => {
-    if (!user?.id) return;
-    getNotifications(user.id, { limit: 20 }).then((data) => {
-      if (data.notifications) {
-        setNotifications(data.notifications);
-        setUnreadCount(data.notifications.filter((n) => !n.read).length);
-      }
-    });
-  }, [user?.id]);
+  // React Query: fetch + cache + background refetch
+  const { data } = useNotifications(user?.id);
+  const markAllRead = useMarkAllRead(user?.id);
 
-  // Realtime updates
+  const notifications = data?.notifications || [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // Realtime updates — optimistically prepend to cached data
   useRealtimeNotifications(user?.id, (newNotif) => {
-    setNotifications((prev) => [newNotif, ...prev].slice(0, 20));
-    setUnreadCount((c) => c + 1);
+    queryClient.setQueryData(queryKeys.notifications(user?.id), (old) => {
+      if (!old?.notifications) return { notifications: [newNotif] };
+      return { notifications: [newNotif, ...old.notifications].slice(0, 20) };
+    });
   });
 
   // Close on click outside
@@ -38,11 +37,13 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleMarkAllRead = async () => {
-    if (!user?.id) return;
-    await markAllNotificationsRead(user.id);
-    setNotifications((n) => n.map((x) => ({ ...x, read: true })));
-    setUnreadCount(0);
+  const handleMarkAllRead = () => {
+    // Optimistic update
+    queryClient.setQueryData(queryKeys.notifications(user?.id), (old) => {
+      if (!old?.notifications) return old;
+      return { notifications: old.notifications.map((n) => ({ ...n, read: true })) };
+    });
+    markAllRead.mutate();
   };
 
   return (

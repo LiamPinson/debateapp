@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { setSessionCookie } from "@/lib/auth";
 import { randomBytes, createHash } from "crypto";
+import { OAuthSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/auth/oauth
  * { accessToken }
  * Verifies a Supabase OAuth access token, finds or creates a user row,
- * creates a session token, and returns { user, sessionToken, isNewUser }.
+ * creates a session token, and returns { user, isNewUser } + HttpOnly cookie.
  */
 export async function POST(request) {
   try {
-    const { accessToken } = await request.json();
+    const { data: body, error: validationError } = await validate(request, OAuthSchema);
+    if (validationError) return validationError;
 
-    if (!accessToken) {
-      return NextResponse.json({ error: "accessToken required" }, { status: 400 });
-    }
+    const { accessToken } = body;
 
     const db = createServiceClient();
 
@@ -86,9 +87,9 @@ export async function POST(request) {
     const sessionToken = randomBytes(32).toString("hex");
     const tokenHash = createHash("sha256").update(sessionToken).digest("hex");
 
-    await db.from("sessions").insert({ token_hash: tokenHash });
+    await db.from("sessions").insert({ token_hash: tokenHash, user_id: user.id });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       user: {
         id: user.id,
         username: user.username,
@@ -99,9 +100,9 @@ export async function POST(request) {
         losses: user.losses,
         draws: user.draws,
       },
-      sessionToken,
       isNewUser,
     });
+    return setSessionCookie(res, sessionToken);
   } catch (err) {
     console.error("OAuth route error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });

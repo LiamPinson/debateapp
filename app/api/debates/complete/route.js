@@ -3,6 +3,8 @@ import { waitUntil } from "@vercel/functions";
 import { createServiceClient } from "@/lib/supabase";
 import { startRecording, stopRecording, deleteDailyRoom } from "@/lib/daily";
 import { processDebateCompletion } from "@/lib/pipeline";
+import { resolveCallerIdentity, resolveCallerSide } from "@/lib/auth";
+import { DebateActionSchema, validate } from "@/lib/schemas";
 
 export const maxDuration = 300;
 
@@ -19,24 +21,50 @@ const PHASE_ORDER = [
 
 /**
  * POST /api/debates/complete
- * Handle debate lifecycle events: start, phase change, complete, forfeit.
+ * Handle debate lifecycle events: ready, start, phase change, complete, forfeit, cancel.
  *
- * Body: { debateId, action, phase?, side? }
- * Actions: 'start', 'phase', 'complete', 'forfeit'
+ * Body: { debateId, action, phase? }
+ * Actions: 'ready', 'start', 'phase', 'complete', 'forfeit', 'cancel'
+ *
+ * The caller's side is derived server-side from their session token —
+ * the client-supplied 'side' field is ignored for security.
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { debateId, action, phase, side } = body;
+    const { data: body, error: validationError } = await validate(request, DebateActionSchema);
+    if (validationError) return validationError;
 
-    if (!debateId || !action) {
+    const { debateId, action, phase } = body;
+
+    const db = createServiceClient();
+
+    // ── Resolve caller identity from session token ──
+    const caller = await resolveCallerIdentity(request);
+    if (!caller) {
       return NextResponse.json(
-        { error: "debateId and action required" },
-        { status: 400 }
+        { error: "Authentication required" },
+        { status: 401 }
       );
     }
 
-    const db = createServiceClient();
+    // ── Look up debate and verify caller is a participant ──
+    const { data: debateRecord } = await db
+      .from("debates")
+      .select("pro_user_id, pro_session_id, con_user_id, con_session_id")
+      .eq("id", debateId)
+      .single();
+
+    if (!debateRecord) {
+      return NextResponse.json({ error: "Debate not found" }, { status: 404 });
+    }
+
+    const side = resolveCallerSide(debateRecord, caller);
+    if (!side) {
+      return NextResponse.json(
+        { error: "You are not a participant in this debate" },
+        { status: 403 }
+      );
+    }
 
     switch (action) {
       // ---- MARK READY (prematch) ----
@@ -44,13 +72,6 @@ export async function POST(request) {
       // atomically starts the debate and returns the real started_at timestamp
       // so both clients can sync their timers to the same origin.
       case "ready": {
-        if (!side || !["pro", "con"].includes(side)) {
-          return NextResponse.json(
-            { error: "side required (pro or con)" },
-            { status: 400 }
-          );
-        }
-
         const readyField = side === "pro" ? "pro_ready" : "con_ready";
 
         // Mark this side ready; guard on prematch so we ignore late calls.
@@ -244,27 +265,7 @@ export async function POST(request) {
 
       // ---- PHASE TRANSITION ----
       case "phase": {
-        if (!phase) {
-          return NextResponse.json(
-            { error: "phase required" },
-            { status: 400 }
-          );
-        }
-
-        const validPhases = [
-          "opening_pro",
-          "opening_con",
-          "freeflow",
-          "closing_con",
-          "closing_pro",
-          "ended",
-        ];
-        if (!validPhases.includes(phase)) {
-          return NextResponse.json(
-            { error: "Invalid phase" },
-            { status: 400 }
-          );
-        }
+        // phase is guaranteed by Zod (DebateActionSchema discriminated union)
 
         // Determine what the previous phase MUST be for this transition to be valid
         const targetIndex = PHASE_ORDER.indexOf(phase);
@@ -375,20 +376,11 @@ export async function POST(request) {
 
       // ---- FORFEIT ----
       case "forfeit": {
-        if (!side) {
-          return NextResponse.json(
-            { error: "side required for forfeit" },
-            { status: 400 }
-          );
-        }
-
+        // side is derived server-side from the caller's session token
         const winner = side === "pro" ? "con" : "pro";
 
         // Atomic: go directly to terminal "forfeited" state inline.
         // The CAS guard (.eq status in_progress) prevents double-forfeit.
-        // Previous approach used a transitional "forfeiting" status + waitUntil
-        // pipeline, but Vercel kept killing the background work before the
-        // critical DB update completed, leaving debates stuck forever.
         const { data: forfeitResult, error: forfeitErr } = await db
           .from("debates")
           .update({
@@ -425,16 +417,10 @@ export async function POST(request) {
               const winnerId = winner === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
               const loserId = side === "pro" ? forfeitResult.pro_user_id : forfeitResult.con_user_id;
               if (winnerId) {
-                await db.rpc("increment_wins", { user_uuid: winnerId }).catch(async () => {
-                  const { data } = await db.from("users").select("wins, total_debates").eq("id", winnerId).single();
-                  if (data) await db.from("users").update({ wins: data.wins + 1, total_debates: data.total_debates + 1 }).eq("id", winnerId);
-                });
+                await db.rpc("increment_wins", { user_uuid: winnerId });
               }
               if (loserId) {
-                await db.rpc("increment_losses", { user_uuid: loserId }).catch(async () => {
-                  const { data } = await db.from("users").select("losses, total_debates").eq("id", loserId).single();
-                  if (data) await db.from("users").update({ losses: data.losses + 1, total_debates: data.total_debates + 1 }).eq("id", loserId);
-                });
+                await db.rpc("increment_losses", { user_uuid: loserId });
               }
               if (forfeitResult.daily_room_name) {
                 await stopRecording(forfeitResult.daily_room_name).catch(() => {});

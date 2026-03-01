@@ -7,8 +7,6 @@ import { loginWithOAuth } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
 import ProfileCustomizationModal from "@/app/components/ProfileCustomizationModal";
 
-const SESSION_KEY = "debate_session_token";
-
 export default function AuthCallbackPage() {
   const router = useRouter();
   const { login } = useSession();
@@ -40,7 +38,7 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        localStorage.setItem(SESSION_KEY, result.sessionToken);
+        // Session cookie is set automatically by the server response
         login(result.user);
 
         // Check if new user - if so, show profile customization modal

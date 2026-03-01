@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase";
+import { CreateChallengeSchema, RespondChallengeSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/challenges
@@ -9,19 +10,10 @@ import { createServiceClient } from "@/lib/supabase";
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, CreateChallengeSchema);
+    if (validationError) return validationError;
+
     const { challengerId, targetId, topicId, timeLimit } = body;
-
-    if (!challengerId || !targetId || !topicId) {
-      return NextResponse.json(
-        { error: "challengerId, targetId, and topicId are required" },
-        { status: 400 }
-      );
-    }
-
-    if (challengerId === targetId) {
-      return NextResponse.json({ error: "Cannot challenge yourself" }, { status: 400 });
-    }
 
     const db = createServiceClient();
 
@@ -78,15 +70,10 @@ export async function POST(request) {
  */
 export async function PATCH(request) {
   try {
-    const body = await request.json();
-    const { challengeId, action } = body;
+    const { data: body, error: validationError } = await validate(request, RespondChallengeSchema);
+    if (validationError) return validationError;
 
-    if (!challengeId || !["accept", "decline"].includes(action)) {
-      return NextResponse.json(
-        { error: "challengeId and action (accept/decline) required" },
-        { status: 400 }
-      );
-    }
+    const { challengeId, action } = body;
 
     const db = createServiceClient();
 

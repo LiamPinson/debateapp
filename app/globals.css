@@ -16,7 +16,7 @@
 body {
   background-color: var(--color-arena-bg);
   color: var(--color-arena-text);
-  font-family: 'Ruluko', system-ui, -apple-system, sans-serif;
+  font-family: inherit; /* Inherited from next/font on <html> — self-hosted, zero CLS */
 }
 
 /* Scrollbar styling */

@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { loginWithPassword } from "@/lib/api-client";
 import { createOAuthClient } from "@/lib/supabase";
 import ForgotPasswordModal from "./ForgotPasswordModal";
-
-const SESSION_KEY = "debate_session_token";
 
 function GoogleIcon() {
   return (
@@ -37,14 +35,24 @@ export default function LoginModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  if (!open) return null;
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setEmail("");
     setPassword("");
     setError(null);
     onClose();
-  };
+  }, [onClose]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (e.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open, handleClose]);
+
+  if (!open) return null;
 
   const handleGoogle = async () => {
     setError(null);
@@ -75,9 +83,7 @@ export default function LoginModal({ open, onClose }) {
       if (result.error) {
         setError(result.error);
       } else {
-        if (result.sessionToken) {
-          localStorage.setItem(SESSION_KEY, result.sessionToken);
-        }
+        // Session cookie is set automatically by the server response
         login(result.user);
         handleClose();
 
@@ -96,9 +102,15 @@ export default function LoginModal({ open, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4">
-        <h2 className="text-xl font-bold mb-2">Sign In</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-title"
+        className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="login-title" className="text-xl font-bold mb-2">Sign In</h2>
         <p className="text-sm text-arena-muted mb-4">Enter your email and password to sign in.</p>
 
         <div className="space-y-4">
@@ -158,7 +170,7 @@ export default function LoginModal({ open, onClose }) {
               />
             </div>
 
-            {error && <p className="text-sm text-arena-con">{error}</p>}
+            {error && <p role="alert" className="text-sm text-arena-con">{error}</p>}
 
             <div className="flex gap-3">
               <button

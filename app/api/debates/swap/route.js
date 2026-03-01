@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requestSideSwap } from "@/lib/matchmaking";
+import { SideSwapSchema, validate } from "@/lib/schemas";
 
 /**
  * POST /api/debates/swap
@@ -9,19 +10,10 @@ import { requestSideSwap } from "@/lib/matchmaking";
  */
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const { data: body, error: validationError } = await validate(request, SideSwapSchema);
+    if (validationError) return validationError;
+
     const { debateId, requestingSide } = body;
-
-    if (!debateId || !requestingSide) {
-      return NextResponse.json(
-        { error: "debateId and requestingSide required" },
-        { status: 400 }
-      );
-    }
-
-    if (!["pro", "con"].includes(requestingSide)) {
-      return NextResponse.json({ error: "requestingSide must be 'pro' or 'con'" }, { status: 400 });
-    }
 
     const result = await requestSideSwap(debateId, requestingSide);
     return NextResponse.json(result);
