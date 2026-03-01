@@ -6,7 +6,7 @@ import { randomBytes, createHash } from "crypto";
  * POST /api/auth/oauth
  * { accessToken }
  * Verifies a Supabase OAuth access token, finds or creates a user row,
- * creates a session token, and returns { user, sessionToken }.
+ * creates a session token, and returns { user, sessionToken, isNewUser }.
  */
 export async function POST(request) {
   try {
@@ -33,12 +33,18 @@ export async function POST(request) {
       .single();
 
     let user = existingUser;
+    let isNewUser = false;
 
     if (!user) {
-      // First Google login — auto-generate username from full name or email prefix
+      isNewUser = true;
+
+      // First OAuth login — use provider username (X, Google, etc.) or auto-generate from full name/email
       const fullName = supabaseUser.user_metadata?.full_name || "";
+      const providerUsername = supabaseUser.user_metadata?.user_name || ""; // X provider sets this
       const emailPrefix = supabaseUser.email?.split("@")[0] || "user";
-      let base = (fullName || emailPrefix)
+
+      // Prefer provider username, then full name, then email prefix
+      let base = (providerUsername || fullName || emailPrefix)
         .replace(/[^a-zA-Z0-9_]/g, "")
         .slice(0, 24);
       if (base.length < 3) base = base.padEnd(3, "0");
@@ -94,6 +100,7 @@ export async function POST(request) {
         draws: user.draws,
       },
       sessionToken,
+      isNewUser,
     });
   } catch (err) {
     console.error("OAuth route error:", err);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
 import { loginWithPassword } from "@/lib/api-client";
 import { createOAuthClient } from "@/lib/supabase";
@@ -19,7 +20,16 @@ function GoogleIcon() {
   );
 }
 
+function XIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+      <path d="M18.244 2.25h3.908l-8.514 9.729 10.025 13.267h-7.894l-6.259-8.617-7.738 8.617H1.126l9.079-10.386L.75 2.25h8.08l5.877 7.891 7.337-7.891zm-1.386 17.359h2.16L6.736 4.413H4.42l12.438 15.196z"/>
+    </svg>
+  );
+}
+
 export default function LoginModal({ open, onClose }) {
+  const router = useRouter();
   const { login } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,6 +56,16 @@ export default function LoginModal({ open, onClose }) {
     if (oauthError) setError(oauthError.message);
   };
 
+  const handleX = async () => {
+    setError(null);
+    const supabase = createOAuthClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "x",
+      options: { redirectTo: window.location.origin + "/auth/callback" },
+    });
+    if (oauthError) setError(oauthError.message);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -60,6 +80,13 @@ export default function LoginModal({ open, onClose }) {
         }
         login(result.user);
         handleClose();
+
+        // Redirect based on admin status
+        if (result.user?.isAdmin) {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/");
+        }
       }
     } catch (err) {
       setError(err.message);
@@ -75,12 +102,20 @@ export default function LoginModal({ open, onClose }) {
         <p className="text-sm text-arena-muted mb-4">Enter your email and password to sign in.</p>
 
         <div className="space-y-4">
-          <button
-            onClick={handleGoogle}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-          >
-            <GoogleIcon /> Continue with Google
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleGoogle}
+              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+            >
+              <GoogleIcon /> Google
+            </button>
+            <button
+              onClick={handleX}
+              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+            >
+              <XIcon /> X
+            </button>
+          </div>
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
             <hr className="flex-1 border-arena-border" />

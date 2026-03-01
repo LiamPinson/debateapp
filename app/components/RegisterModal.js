@@ -15,6 +15,14 @@ function GoogleIcon() {
   );
 }
 
+function XIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+      <path d="M18.244 2.25h3.908l-8.514 9.729 10.025 13.267h-7.894l-6.259-8.617-7.738 8.617H1.126l9.079-10.386L.75 2.25h8.08l5.877 7.891 7.337-7.891zm-1.386 17.359h2.16L6.736 4.413H4.42l12.438 15.196z"/>
+    </svg>
+  );
+}
+
 export default function RegisterModal({ open, onClose }) {
   const { register, session } = useSession();
   const [username, setUsername] = useState("");
@@ -33,6 +41,16 @@ export default function RegisterModal({ open, onClose }) {
     const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
+      options: { redirectTo: window.location.origin + "/auth/callback" },
+    });
+    if (oauthError) setError(oauthError.message);
+  };
+
+  const handleX = async () => {
+    setError(null);
+    const supabase = createOAuthClient();
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "x",
       options: { redirectTo: window.location.origin + "/auth/callback" },
     });
     if (oauthError) setError(oauthError.message);
@@ -77,12 +95,20 @@ export default function RegisterModal({ open, onClose }) {
         </p>
 
         <div className="space-y-4">
-          <button
-            onClick={handleGoogle}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-          >
-            <GoogleIcon /> Continue with Google
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={handleGoogle}
+              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+            >
+              <GoogleIcon /> Google
+            </button>
+            <button
+              onClick={handleX}
+              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+            >
+              <XIcon /> X
+            </button>
+          </div>
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
             <hr className="flex-1 border-arena-border" />

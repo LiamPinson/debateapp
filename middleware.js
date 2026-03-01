@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 
 // Routes that don't require session validation
-const PUBLIC_ROUTES = ["/api/auth/session", "/api/auth/register"];
+const PUBLIC_ROUTES = [
+  "/api/auth/session",
+  "/api/auth/register",
+  "/api/auth/oauth",
+  "/api/auth/oauth-profile-complete",
+  "/api/auth/login",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+];
 
 // Routes that require admin auth
 const ADMIN_ROUTES = ["/api/scoring/trigger"];
