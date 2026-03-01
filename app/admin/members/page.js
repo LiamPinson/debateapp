@@ -86,8 +86,7 @@ export default function AdminMembersPage() {
       setActivityLoading(userId);
       setError(null);
 
-      const params = new URLSearchParams({ userId: user.id });
-      const response = await fetch(`/api/admin/members/${userId}/activity?${params}`);
+      const response = await fetch(`/api/admin/members/${userId}/activity?userId=${user.id}`);
 
       if (!response.ok) {
         const data = await response.json();
@@ -113,9 +112,8 @@ export default function AdminMembersPage() {
       setDeleteLoading(deleteConfirm.id);
       setError(null);
 
-      const params = new URLSearchParams({ userId: user.id });
       const response = await fetch(
-        `/api/admin/members/${deleteConfirm.id}/delete?${params}`,
+        `/api/admin/members/${deleteConfirm.id}/delete?userId=${user.id}`,
         { method: "DELETE" }
       );
 
