@@ -25,7 +25,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request, { params }) {
   try {
     const { userId } = params;
-    const { searchParams } = new URL(request.url);
+    const searchParams = request.nextUrl.searchParams;
     const adminId = searchParams.get('userId');
 
     if (!adminId) {
