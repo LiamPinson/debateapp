@@ -123,15 +123,18 @@ export default function AdminDashboard() {
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* Total Debates Card */}
-            <div className="bg-arena-card border border-arena-border rounded-xl p-8">
+            <Link
+              href="/admin/debates"
+              className="bg-arena-card border border-arena-border rounded-xl p-8 hover:border-arena-accent/50 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-arena-muted mb-2">Total Debates</p>
-                  <p className="text-4xl font-bold text-arena-accent">
+                  <p className="text-4xl font-bold text-arena-accent group-hover:scale-105 transition-transform">
                     {stats.totalDebates}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-accent/10 text-arena-accent rounded-full flex items-center justify-center" aria-hidden="true">
+                <div className="w-12 h-12 bg-arena-accent/10 text-arena-accent rounded-full flex items-center justify-center group-hover:bg-arena-accent/20 transition-colors" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -147,20 +150,23 @@ export default function AdminDashboard() {
                   </svg>
                 </div>
               </div>
-            </div>
+            </Link>
 
             {/* Registered Users Card */}
-            <div className="bg-arena-card border border-arena-border rounded-xl p-8">
+            <Link
+              href="/admin/members"
+              className="bg-arena-card border border-arena-border rounded-xl p-8 hover:border-arena-pro/50 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-arena-muted mb-2">
                     Registered Users
                   </p>
-                  <p className="text-4xl font-bold text-arena-pro">
+                  <p className="text-4xl font-bold text-arena-pro group-hover:scale-105 transition-transform">
                     {stats.totalUsers}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-pro/10 text-arena-pro rounded-full flex items-center justify-center" aria-hidden="true">
+                <div className="w-12 h-12 bg-arena-pro/10 text-arena-pro rounded-full flex items-center justify-center group-hover:bg-arena-pro/20 transition-colors" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -176,20 +182,23 @@ export default function AdminDashboard() {
                   </svg>
                 </div>
               </div>
-            </div>
+            </Link>
 
             {/* Topics Pending Approval Card */}
-            <div className="bg-arena-card border border-arena-border rounded-xl p-8">
+            <Link
+              href="/admin/topics"
+              className="bg-arena-card border border-arena-border rounded-xl p-8 hover:border-arena-con/50 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-arena-muted mb-2">
                     Topics Pending Approval
                   </p>
-                  <p className="text-4xl font-bold text-arena-con">
+                  <p className="text-4xl font-bold text-arena-con group-hover:scale-105 transition-transform">
                     {stats.pendingTopics}
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-arena-con/10 text-arena-con rounded-full flex items-center justify-center" aria-hidden="true">
+                <div className="w-12 h-12 bg-arena-con/10 text-arena-con rounded-full flex items-center justify-center group-hover:bg-arena-con/20 transition-colors" aria-hidden="true">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -205,7 +214,7 @@ export default function AdminDashboard() {
                   </svg>
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
         ) : null}
       </div>
