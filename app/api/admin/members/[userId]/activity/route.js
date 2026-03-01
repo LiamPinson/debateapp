@@ -8,12 +8,19 @@ export const dynamic = 'force-dynamic';
  * Returns activity stats for a specific user
  * Requires authenticated admin user
  *
- * Query: { userId }
+ * Path Params: { userId } - The user ID to retrieve activity for
+ * Query Params: { userId } - The authenticated admin user ID (must have is_admin=true)
  *
  * Returns: {
  *   user: { id, username, email, created_at },
  *   activity: { debatesParticipated, topicsSubmitted, topicsApproved, topicsRejected }
  * }
+ * Errors:
+ *   - 400 Bad Request: userId query param not provided
+ *   - 401 Unauthorized: Admin user not found or session invalid
+ *   - 403 Forbidden: User exists but is not an admin
+ *   - 404 Not Found: Target user not found
+ *   - 500 Internal Server Error: Database query failure
  */
 export async function GET(request, { params }) {
   try {
