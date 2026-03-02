@@ -86,7 +86,7 @@ export default function AdminMembersPage() {
       setActivityLoading(userId);
       setError(null);
 
-      const response = await fetch(`/api/admin/members/${userId}/activity?userId=${user.id}`);
+      const response = await fetch(`/api/admin/members/${userId}/activity?adminId=${user.id}`);
 
       if (!response.ok) {
         const data = await response.json();
@@ -113,7 +113,7 @@ export default function AdminMembersPage() {
       setError(null);
 
       const response = await fetch(
-        `/api/admin/members/${deleteConfirm.id}/delete?userId=${user.id}`,
+        `/api/admin/members/${deleteConfirm.id}/delete?adminId=${user.id}`,
         { method: "DELETE" }
       );
 

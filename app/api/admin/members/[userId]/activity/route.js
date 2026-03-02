@@ -26,11 +26,11 @@ export async function GET(request, { params }) {
   try {
     const { userId } = params;
     const { searchParams } = new URL(request.url);
-    const adminId = searchParams.get('userId');
+    const adminId = searchParams.get('adminId');
 
     if (!adminId) {
       return NextResponse.json(
-        { error: 'userId required' },
+        { error: 'adminId required' },
         { status: 400 }
       );
     }
