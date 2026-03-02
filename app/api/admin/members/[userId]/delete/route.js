@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic';
 export async function DELETE(request, { params }) {
   try {
     const { userId } = params;
-    const searchParams = request.nextUrl.searchParams;
+    const { searchParams } = new URL(request.url);
     const adminId = searchParams.get('userId');
 
     if (!adminId) {
