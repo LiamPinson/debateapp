@@ -61,6 +61,7 @@ export async function GET(request) {
         losses: user.losses,
         draws: user.draws,
         strike_count: user.strike_count,
+        points_balance: user.points_balance ?? 0,
         created_at: user.created_at,
       },
       recent_debates: (debates || []).map((d) => ({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getProfile } from "@/lib/api-client";
+import { getProfile, getPointTransactions } from "@/lib/api-client";
 import { useSession } from "@/lib/SessionContext";
 import RankBadge, { RankProgress } from "../../components/RankBadge";
 import DebateCard from "../../components/DebateCard";
@@ -11,6 +11,7 @@ export default function ProfileClient({ initialProfile, profileId }) {
   // Start with server-provided data (no loading flash); fetch full data for recent debates
   const [profile, setProfile] = useState(initialProfile || null);
   const [recentDebates, setRecentDebates] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(!initialProfile);
 
   const isOwnProfile = user?.id === profileId;
@@ -23,6 +24,14 @@ export default function ProfileClient({ initialProfile, profileId }) {
       setLoading(false);
     });
   }, [profileId]);
+
+  useEffect(() => {
+    // Fetch transaction history only for own profile
+    if (!isOwnProfile) return;
+    getPointTransactions(profileId).then((data) => {
+      setTransactions(data.transactions || []);
+    }).catch(() => {});
+  }, [profileId, isOwnProfile]);
 
   if (loading) {
     return (
@@ -96,6 +105,43 @@ export default function ProfileClient({ initialProfile, profileId }) {
           />
         </div>
       </div>
+
+      {/* Points balance (own profile only) */}
+      {isOwnProfile && (
+        <div className="bg-arena-surface border border-arena-border rounded-xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <span className="font-semibold">Points Balance</span>
+            <span className="flex items-center gap-1.5 text-2xl font-bold text-arena-accent">
+              <span>⬡</span>
+              <span>{profile.points_balance ?? 0}</span>
+            </span>
+          </div>
+          <p className="text-xs text-arena-muted mb-4">
+            Earn points by completing debates · Spend 2 pts to propose a topic
+          </p>
+
+          {transactions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-arena-muted mb-2">Recent activity</p>
+              {transactions.slice(0, 10).map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between text-sm">
+                  <span className="text-arena-muted">
+                    {tx.type === "debate_completed" ? "Debate completed" : "Topic proposed"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={tx.amount > 0 ? "text-arena-pro font-medium" : "text-arena-con font-medium"}>
+                      {tx.amount > 0 ? `+${tx.amount}` : tx.amount} pts
+                    </span>
+                    <span className="text-xs text-arena-muted">
+                      {new Date(tx.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent debates */}
       {recentDebates.length > 0 && (

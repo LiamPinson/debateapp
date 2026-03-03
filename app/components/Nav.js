@@ -7,6 +7,7 @@ import NotificationDropdown from "./NotificationDropdown";
 import RegisterModal from "./RegisterModal";
 import LoginModal from "./LoginModal";
 import RankBadge from "./RankBadge";
+import PointsBalance from "./PointsBalance";
 
 export default function Nav() {
   const { user, session, loading, logout } = useSession();
@@ -85,13 +86,16 @@ export default function Nav() {
                     };
                     document.addEventListener("mousedown", handler);
                   }}>
-                    <button
-                      onClick={() => setMenuOpen(!menuOpen)}
-                      className="flex items-center gap-2 text-sm hover:text-arena-accent transition-colors"
-                    >
-                      <span>{user.username}</span>
-                      <RankBadge rank={user.rank_tier} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <PointsBalance userId={user.id} initialBalance={user.points_balance ?? 0} />
+                      <button
+                        onClick={() => setMenuOpen(!menuOpen)}
+                        className="flex items-center gap-2 text-sm hover:text-arena-accent transition-colors"
+                      >
+                        <span>{user.username}</span>
+                        <RankBadge rank={user.rank_tier} />
+                      </button>
+                    </div>
                     {menuOpen && (
                       <div className="absolute right-0 mt-2 w-48 bg-arena-surface border border-arena-border rounded-lg shadow-xl py-1">
                         <Link
