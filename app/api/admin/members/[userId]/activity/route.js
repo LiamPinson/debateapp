@@ -26,11 +26,11 @@ export async function GET(request, { params }) {
   try {
     const { userId } = params;
     const { searchParams } = new URL(request.url);
-    const adminId = searchParams.get('userId');
+    const adminId = searchParams.get('adminId');
 
     if (!adminId) {
       return NextResponse.json(
-        { error: 'userId required' },
+        { error: 'adminId required' },
         { status: 400 }
       );
     }
@@ -86,7 +86,7 @@ export async function GET(request, { params }) {
     const { count: topicsSubmitted, error: submittedError } = await db
       .from('custom_topics')
       .select('id', { count: 'exact', head: true })
-      .eq('submitted_by', userId);
+      .eq('user_id', userId);
 
     if (submittedError) {
       throw new Error(`Failed to fetch submitted topics: ${submittedError.message}`);
@@ -96,7 +96,7 @@ export async function GET(request, { params }) {
     const { count: topicsApproved, error: approvedError } = await db
       .from('custom_topics')
       .select('id', { count: 'exact', head: true })
-      .eq('submitted_by', userId)
+      .eq('user_id', userId)
       .eq('status', 'approved');
 
     if (approvedError) {
@@ -107,7 +107,7 @@ export async function GET(request, { params }) {
     const { count: topicsRejected, error: rejectedError } = await db
       .from('custom_topics')
       .select('id', { count: 'exact', head: true })
-      .eq('submitted_by', userId)
+      .eq('user_id', userId)
       .eq('status', 'rejected');
 
     if (rejectedError) {

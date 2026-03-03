@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/SessionContext";
-import { loginWithPassword } from "@/lib/api-client";
+import { loginWithPassword, saveSessionToken } from "@/lib/api-client";
 import { createOAuthClient } from "@/lib/supabase";
 import ForgotPasswordModal from "./ForgotPasswordModal";
 
@@ -18,14 +18,6 @@ function GoogleIcon() {
   );
 }
 
-function XIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-      <path d="M18.244 2.25h3.908l-8.514 9.729 10.025 13.267h-7.894l-6.259-8.617-7.738 8.617H1.126l9.079-10.386L.75 2.25h8.08l5.877 7.891 7.337-7.891zm-1.386 17.359h2.16L6.736 4.413H4.42l12.438 15.196z"/>
-    </svg>
-  );
-}
-
 export default function LoginModal({ open, onClose }) {
   const router = useRouter();
   const { login } = useSession();
@@ -33,42 +25,23 @@ export default function LoginModal({ open, onClose }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  const handleClose = useCallback(() => {
+  if (!open) return null;
+
+  const handleClose = () => {
     setEmail("");
     setPassword("");
     setError(null);
     onClose();
-  }, [onClose]);
-
-  // Close on Escape key
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => {
-      if (e.key === "Escape") handleClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, handleClose]);
-
-  if (!open) return null;
+  };
 
   const handleGoogle = async () => {
     setError(null);
     const supabase = createOAuthClient();
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/auth/callback" },
-    });
-    if (oauthError) setError(oauthError.message);
-  };
-
-  const handleX = async () => {
-    setError(null);
-    const supabase = createOAuthClient();
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "x",
       options: { redirectTo: window.location.origin + "/auth/callback" },
     });
     if (oauthError) setError(oauthError.message);
@@ -83,7 +56,9 @@ export default function LoginModal({ open, onClose }) {
       if (result.error) {
         setError(result.error);
       } else {
-        // Session cookie is set automatically by the server response
+        if (result.sessionToken) {
+          saveSessionToken(result.sessionToken, rememberMe);
+        }
         login(result.user);
         handleClose();
 
@@ -102,32 +77,18 @@ export default function LoginModal({ open, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={handleClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="login-title"
-        className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 id="login-title" className="text-xl font-bold mb-2">Sign In</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-arena-surface border border-arena-border rounded-xl p-6 w-full max-w-md mx-4">
+        <h2 className="text-xl font-bold mb-2">Sign In</h2>
         <p className="text-sm text-arena-muted mb-4">Enter your email and password to sign in.</p>
 
         <div className="space-y-4">
-          <div className="flex gap-3">
-            <button
-              onClick={handleGoogle}
-              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-            >
-              <GoogleIcon /> Google
-            </button>
-            <button
-              onClick={handleX}
-              className="flex-1 flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
-            >
-              <XIcon /> X
-            </button>
-          </div>
+          <button
+            onClick={handleGoogle}
+            className="w-full flex items-center justify-center gap-3 px-4 py-2 border border-arena-border rounded-lg text-sm hover:bg-arena-border/30 transition-colors"
+          >
+            <GoogleIcon /> Continue with Google
+          </button>
 
           <div className="flex items-center gap-3 text-arena-muted text-xs">
             <hr className="flex-1 border-arena-border" />
@@ -170,7 +131,17 @@ export default function LoginModal({ open, onClose }) {
               />
             </div>
 
-            {error && <p role="alert" className="text-sm text-arena-con">{error}</p>}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-arena-border accent-arena-accent cursor-pointer"
+              />
+              <span className="text-sm text-arena-muted">Stay signed in</span>
+            </label>
+
+            {error && <p className="text-sm text-arena-con">{error}</p>}
 
             <div className="flex gap-3">
               <button
