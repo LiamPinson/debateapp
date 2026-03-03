@@ -29,7 +29,7 @@ export async function POST(request) {
     // Look up existing user row by auth_id
     const { data: existingUser } = await db
       .from("users")
-      .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates")
+      .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates, points_balance")
       .eq("auth_id", supabaseUser.id)
       .single();
 
@@ -72,7 +72,7 @@ export async function POST(request) {
           quality_score_avg: 50,
           rank_tier: "Bronze",
         })
-        .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates")
+        .select("id, username, email, rank_tier, quality_score_avg, wins, losses, draws, total_debates, points_balance")
         .single();
 
       if (insertError) {
@@ -99,6 +99,7 @@ export async function POST(request) {
         wins: user.wins,
         losses: user.losses,
         draws: user.draws,
+        points_balance: user.points_balance ?? 0,
       },
       isNewUser,
     });

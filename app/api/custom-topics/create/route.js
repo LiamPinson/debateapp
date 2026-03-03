@@ -6,6 +6,9 @@ import { CreateCustomTopicSchema, validate } from '@/lib/schemas';
 
 export const dynamic = 'force-dynamic';
 
+const TOPIC_COST_POINTS = 2;
+const MAX_TOPICS_PER_DAY = 7;
+
 /**
  * POST /api/custom-topics/create
  * Create a new custom debate topic submission
@@ -46,14 +49,40 @@ export async function POST(request) {
       );
     }
 
-    // Check rate limiting: max 1 topic per user per 24 hours
+    // Look up user row to check points balance
+    const { data: userRow, error: userError } = await db
+      .from('users')
+      .select('id, points_balance')
+      .eq('auth_id', user.id)
+      .single();
+
+    if (userError || !userRow) {
+      return NextResponse.json(
+        { error: 'User record not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check points balance
+    if (userRow.points_balance < TOPIC_COST_POINTS) {
+      const needed = TOPIC_COST_POINTS - userRow.points_balance;
+      return NextResponse.json(
+        {
+          error: `You need ${needed} more point${needed !== 1 ? 's' : ''} to propose a topic. Complete debates to earn points.`,
+          points_balance: userRow.points_balance,
+          points_required: TOPIC_COST_POINTS,
+        },
+        { status: 402 }
+      );
+    }
+
+    // Check rate limit: max 7 topics per user per 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: recentTopics, error: checkError } = await db
       .from('custom_topics')
       .select('id')
       .eq('user_id', user.id)
-      .gte('created_at', twentyFourHoursAgo)
-      .limit(1);
+      .gte('created_at', twentyFourHoursAgo);
 
     if (checkError) {
       console.error('Rate limit check failed:', checkError);
@@ -63,10 +92,26 @@ export async function POST(request) {
       );
     }
 
-    if (recentTopics && recentTopics.length > 0) {
+    if (recentTopics && recentTopics.length >= MAX_TOPICS_PER_DAY) {
       return NextResponse.json(
-        { error: 'You can only create one topic per day. Please try again tomorrow.' },
+        { error: `You can submit up to ${MAX_TOPICS_PER_DAY} topics per day. Please try again tomorrow.` },
         { status: 429 }
+      );
+    }
+
+    // Deduct points atomically before creating the topic
+    const { error: spendError } = await db.rpc('spend_points', {
+      p_user_id: userRow.id,
+      p_amount: TOPIC_COST_POINTS,
+      p_type: 'topic_submitted',
+      p_custom_topic_id: null, // will update after insert if needed
+    });
+
+    if (spendError) {
+      console.error('Failed to spend points:', spendError);
+      return NextResponse.json(
+        { error: 'Failed to deduct points. Please try again.' },
+        { status: 500 }
       );
     }
 

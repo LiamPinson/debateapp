@@ -137,6 +137,7 @@ export async function POST(request) {
         wins: user.wins,
         losses: user.losses,
         draws: user.draws,
+        points_balance: user.points_balance ?? 0,
       },
       auth_id: authData.user.id,
     });

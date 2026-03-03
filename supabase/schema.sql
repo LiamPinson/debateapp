@@ -40,6 +40,7 @@ CREATE TABLE users (
   quality_score_avg NUMERIC(5,2) DEFAULT 50.00,
   strike_count INTEGER DEFAULT 0,
   rank_tier TEXT DEFAULT 'Bronze',
+  points_balance INTEGER NOT NULL DEFAULT 0,
   is_admin BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_active TIMESTAMPTZ DEFAULT NOW()
@@ -274,7 +275,23 @@ CREATE TABLE notifications (
 CREATE INDEX idx_notifications_user ON notifications(user_id, read, created_at DESC);
 
 -- ============================================================
--- 11. ROW LEVEL SECURITY
+-- 11. POINT TRANSACTIONS
+-- ============================================================
+CREATE TABLE point_transactions (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount           INTEGER NOT NULL, -- positive = earned, negative = spent
+  type             TEXT NOT NULL CHECK (type IN ('debate_completed', 'topic_submitted')),
+  debate_id        UUID REFERENCES debates(id) ON DELETE SET NULL,
+  custom_topic_id  UUID REFERENCES custom_topics(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_point_transactions_user ON point_transactions(user_id, created_at DESC);
+CREATE INDEX idx_point_transactions_debate ON point_transactions(debate_id) WHERE debate_id IS NOT NULL;
+
+-- ============================================================
+-- 12. ROW LEVEL SECURITY
 -- ============================================================
 
 -- Enable RLS on all tables
@@ -289,6 +306,16 @@ ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE strikes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE point_transactions ENABLE ROW LEVEL SECURITY;
+
+-- Point Transactions: users can only read their own
+CREATE POLICY "Users can view own transactions"
+  ON point_transactions FOR SELECT
+  USING (
+    user_id IN (
+      SELECT id FROM users WHERE auth_id = auth.uid()
+    )
+  );
 
 -- Topics: public read
 CREATE POLICY "Topics are publicly readable"
@@ -448,6 +475,51 @@ CREATE TRIGGER trg_update_rank_tier
   FOR EACH ROW
   WHEN (OLD.quality_score_avg IS DISTINCT FROM NEW.quality_score_avg)
   EXECUTE FUNCTION update_rank_tier();
+
+-- award_points: inserts a positive transaction and increments user balance atomically
+CREATE OR REPLACE FUNCTION award_points(
+  p_user_id   UUID,
+  p_amount    INT,
+  p_type      TEXT,
+  p_debate_id UUID DEFAULT NULL
+) RETURNS VOID AS $$
+BEGIN
+  INSERT INTO point_transactions (user_id, amount, type, debate_id)
+  VALUES (p_user_id, p_amount, p_type, p_debate_id);
+
+  UPDATE users
+  SET points_balance = points_balance + p_amount
+  WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- spend_points: inserts a negative transaction and decrements balance, raises if insufficient
+CREATE OR REPLACE FUNCTION spend_points(
+  p_user_id         UUID,
+  p_amount          INT,
+  p_type            TEXT,
+  p_custom_topic_id UUID DEFAULT NULL
+) RETURNS VOID AS $$
+DECLARE
+  v_balance INTEGER;
+BEGIN
+  SELECT points_balance INTO v_balance
+  FROM users
+  WHERE id = p_user_id
+  FOR UPDATE;
+
+  IF v_balance < p_amount THEN
+    RAISE EXCEPTION 'Insufficient points: have %, need %', v_balance, p_amount;
+  END IF;
+
+  INSERT INTO point_transactions (user_id, amount, type, custom_topic_id)
+  VALUES (p_user_id, -p_amount, p_type, p_custom_topic_id);
+
+  UPDATE users
+  SET points_balance = points_balance - p_amount
+  WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Function to expire stale queue entries
 CREATE OR REPLACE FUNCTION expire_stale_queue()

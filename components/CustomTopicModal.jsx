@@ -2,13 +2,16 @@
 
 import { useState } from 'react';
 
-export function CustomTopicModal({ isOpen, onClose, onSuccess, isSignedIn }) {
+const TOPIC_COST = 2;
+
+export function CustomTopicModal({ isOpen, onClose, onSuccess, isSignedIn, pointsBalance = 0 }) {
   const [headline, setHeadline] = useState('');
   const [description, setDescription] = useState('');
   const [notificationPref, setNotificationPref] = useState('both');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const canAfford = pointsBalance >= TOPIC_COST;
   const headlineWords = headline.trim().split(/\s+/).filter(w => w).length;
   const descriptionWords = description.trim().split(/\s+/).filter(w => w).length;
 
@@ -90,6 +93,16 @@ export function CustomTopicModal({ isOpen, onClose, onSuccess, isSignedIn }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-2">Create a Custom Debate Topic</h2>
+
+        {/* Points cost indicator */}
+        <div className={`flex items-center justify-between rounded p-3 mb-4 text-sm ${canAfford ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+          <span>
+            {canAfford
+              ? `Costs ${TOPIC_COST} pts to submit · You have ${pointsBalance} pts`
+              : `You need ${TOPIC_COST - pointsBalance} more point${TOPIC_COST - pointsBalance !== 1 ? 's' : ''} · Complete debates to earn more`}
+          </span>
+          <span className="font-bold">⬡ {pointsBalance}</span>
+        </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded p-4 mb-6 text-sm text-yellow-800">
           <p>
@@ -211,6 +224,7 @@ export function CustomTopicModal({ isOpen, onClose, onSuccess, isSignedIn }) {
               type="submit"
               disabled={
                 loading ||
+                !canAfford ||
                 !headline.trim() ||
                 !description.trim() ||
                 headlineWords > 20 ||
@@ -218,7 +232,7 @@ export function CustomTopicModal({ isOpen, onClose, onSuccess, isSignedIn }) {
               }
               className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Submitting...' : 'Submit Topic'}
+              {loading ? 'Submitting...' : `Submit Topic (${TOPIC_COST} pts)`}
             </button>
           </div>
         </form>

@@ -66,6 +66,7 @@ export default function TopicsPage() {
             .catch(err => console.error('Failed to refresh custom topics:', err));
         }}
         isSignedIn={!!user}
+        pointsBalance={user?.points_balance ?? 0}
       />
     </div>
   );
