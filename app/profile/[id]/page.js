@@ -7,7 +7,7 @@ export async function generateMetadata({ params }) {
   const profile = await getProfileSSR(profileId);
 
   if (!profile) {
-    return { title: "Profile Not Found | Arena.gg" };
+    return { title: "Profile Not Found | Dissensus" };
   }
 
   const username = profile.username || "Debater";
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }) {
     profile.quality_score_avg || profile.quality_score || 50
   ).toFixed(1);
 
-  const title = `@${username} | Arena.gg`;
+  const title = `@${username} | Dissensus`;
   const description = `${rankTier} · ${wins}W ${losses}L · Quality Score: ${qualityScore}`;
   const ogImageUrl = `/api/og/profile?userId=${profileId}`;
 

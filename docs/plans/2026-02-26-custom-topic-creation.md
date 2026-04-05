@@ -160,7 +160,7 @@ git commit -m "feat: add custom_topics table and debates.custom_topic_id column"
 import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const OWNER_EMAIL = process.env.OWNER_EMAIL || 'owner@debatearena.com';
+const OWNER_EMAIL = process.env.OWNER_EMAIL || 'owner@dissensuslive.com';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 /**
@@ -178,7 +178,7 @@ export async function sendTopicSubmissionEmail(topicHeadline, approveToken, reje
   }
 
   return resend.emails.send({
-    from: 'Debate Arena <noreply@debatearena.com>',
+    from: 'Dissensus <noreply@dissensuslive.com>',
     to: OWNER_EMAIL,
     subject: `New custom debate topic submitted: "${topicHeadline}"`,
     html: `
@@ -225,7 +225,7 @@ export async function sendTopicApprovedEmail(creatorEmail, topicHeadline) {
   }
 
   return resend.emails.send({
-    from: 'Debate Arena <noreply@debatearena.com>',
+    from: 'Dissensus <noreply@dissensuslive.com>',
     to: creatorEmail,
     subject: `Your debate topic is now live!`,
     html: `
@@ -266,7 +266,7 @@ export async function sendTopicJoinedEmail(creatorEmail, topicHeadline, particip
   }
 
   return resend.emails.send({
-    from: 'Debate Arena <noreply@debatearena.com>',
+    from: 'Dissensus <noreply@dissensuslive.com>',
     to: creatorEmail,
     subject: `Someone joined your debate topic!`,
     html: `
@@ -634,7 +634,7 @@ export async function POST(request) {
       .update({
         status: 'approved',
         approved_at: new Date().toISOString(),
-        approved_by_email: process.env.OWNER_EMAIL || 'owner@debatearena.com',
+        approved_by_email: process.env.OWNER_EMAIL || 'owner@dissensuslive.com',
       })
       .eq('id', topicId);
 

@@ -1,17 +1,17 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "About Arena.gg",
-  description: "Learn about Arena.gg, a voice-based debate platform where you can argue with strangers.",
+  title: "About Dissensus",
+  description: "Learn about Dissensus, a voice-based debate platform where you can argue with strangers.",
   openGraph: {
-    title: "About Arena.gg",
-    description: "Learn about Arena.gg, a voice-based debate platform where you can argue with strangers.",
+    title: "About Dissensus",
+    description: "Learn about Dissensus, a voice-based debate platform where you can argue with strangers.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "About Arena.gg",
-    description: "Learn about Arena.gg, a voice-based debate platform where you can argue with strangers.",
+    title: "About Dissensus",
+    description: "Learn about Dissensus, a voice-based debate platform where you can argue with strangers.",
   },
 };
 
@@ -38,7 +38,7 @@ export default function About() {
           side and consider their points—has become increasingly rare.
         </p>
         <p className="text-arena-muted leading-relaxed">
-          Arena.gg is different. It's not about winning arguments on the internet. It's about having real conversations
+          Dissensus is different. It's not about winning arguments on the internet. It's about having real conversations
           with real people who disagree with you.
         </p>
       </section>
@@ -47,7 +47,7 @@ export default function About() {
       <section className="py-12 border-t border-arena-border">
         <h2 className="text-2xl font-bold mb-6">This Platform Isn't for Everyone</h2>
         <p className="text-arena-muted leading-relaxed mb-4">
-          Arena.gg requires something increasingly rare: the willingness to be wrong. To listen to someone you disagree
+          Dissensus requires something increasingly rare: the willingness to be wrong. To listen to someone you disagree
           with. To change your mind when presented with a good argument. If you're not interested in that, this isn't
           the platform for you.
         </p>
@@ -109,7 +109,7 @@ export default function About() {
         <h2 className="text-2xl font-bold mb-6">Community Scoring</h2>
         <p className="text-arena-muted leading-relaxed">
           Debates are scored by both AI analysis and community voting. Your performance determines your rank and standing
-          in the Arena.gg community. Climb from Bronze through Silver, Gold, Platinum, and Diamond based on the quality of
+          in the Dissensus community. Climb from Bronze through Silver, Gold, Platinum, and Diamond based on the quality of
           your arguments and the respect you earn from your opponents.
         </p>
       </section>
@@ -145,7 +145,7 @@ export default function About() {
             },
             {
               q: "Do I need to be an expert?",
-              a: "No. Arena.gg is for everyone willing to engage in good faith. You learn by debating, not by already being an expert.",
+              a: "No. Dissensus is for everyone willing to engage in good faith. You learn by debating, not by already being an expert.",
             },
           ].map((item) => (
             <div key={item.q}>

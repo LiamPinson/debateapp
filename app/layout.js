@@ -10,7 +10,7 @@ const ruluko = Ruluko({
 });
 
 export const metadata = {
-  title: "Arena.gg — Debate Anyone",
+  title: "Dissensus — Debate Anyone",
   description: "Voice-based debates with random opponents. AI-scored. Community-judged.",
 };
 

@@ -2,18 +2,18 @@ import Link from "next/link";
 import HomeHero from "./HomeHero";
 
 export const metadata = {
-  title: "Arena.gg — Debate Anyone",
+  title: "Dissensus — Debate Anyone",
   description:
     "Voice-based debates with random opponents. AI-scored. Community-judged.",
   openGraph: {
-    title: "Arena.gg — Debate Anyone",
+    title: "Dissensus — Debate Anyone",
     description:
       "Voice-based debates with random opponents. AI-scored. Community-judged.",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Arena.gg — Debate Anyone",
+    title: "Dissensus — Debate Anyone",
     description:
       "Voice-based debates with random opponents. AI-scored. Community-judged.",
   },

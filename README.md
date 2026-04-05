@@ -1,4 +1,4 @@
-# Arena.gg — Debate Platform
+# Dissensus — Debate Platform
 
 Voice-based debate platform with matchmaking, AI scoring, and community voting.
 
@@ -8,7 +8,7 @@ Voice-based debate platform with matchmaking, AI scoring, and community voting.
 |---------|---------|
 | Next.js 14 (App Router) | Frontend + API routes |
 | Supabase | Postgres DB, auth, realtime subscriptions |
-| Daily.co | WebRTC audio rooms (verbalviol.daily.co) |
+| Daily.co | WebRTC audio rooms (dissensus.daily.co) |
 | Deepgram | Speech-to-text transcription |
 | Anthropic Claude | Two-tiered AI debate scoring |
 | Vercel | Hosting |
@@ -73,7 +73,7 @@ Fill in `.env.local`:
 | NEXT_PUBLIC_SUPABASE_ANON_KEY | Supabase > Settings > API > anon/public key |
 | SUPABASE_SERVICE_ROLE_KEY | Supabase > Settings > API > service_role key (secret) |
 | DAILY_API_KEY | Daily.co > Developers > API Keys |
-| NEXT_PUBLIC_DAILY_DOMAIN | Already set to verbalviol.daily.co |
+| NEXT_PUBLIC_DAILY_DOMAIN | Already set to dissensus.daily.co |
 | DEEPGRAM_API_KEY | Deepgram > API Keys |
 | ANTHROPIC_API_KEY | Anthropic Console > API Keys |
 

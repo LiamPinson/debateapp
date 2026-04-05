@@ -5,7 +5,7 @@ import RankBadge from "@/app/components/RankBadge";
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata() {
-  return { title: "Leaderboard | Arena.gg" };
+  return { title: "Leaderboard | Dissensus" };
 }
 
 export default async function LeaderboardPage() {
